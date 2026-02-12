@@ -20,31 +20,15 @@ class RequiredDocument extends Model
         'is_required' => 'boolean',
     ];
 
-    // العلاقات
-    
-    /**
-     * الوثائق المرفوعة من هذا النوع
-     * 
-     * ملاحظة: العلاقة تعتمد على document_type وليس على المفتاح الأساسي
-     */
+    // ========== العلاقات ==========
+
     public function uploadedDocuments()
     {
         return $this->hasMany(UserUploadedDocument::class, 'document_type', 'document_type');
     }
 
-    /**
-     * الحصول على الوثائق المرفوعة لمستخدم معين
-     */
-    public function uploadedDocumentsForUser($userId)
-    {
-        return $this->uploadedDocuments()
-            ->where('user_id', $userId)
-            ->get();
-    }
+    // ========== طرق المساعدة ==========
 
-    /**
-     * التحقق إذا كان المستخدم قد رفع هذه الوثيقة
-     */
     public function isUploadedByUser($userId)
     {
         return $this->uploadedDocuments()
@@ -53,9 +37,6 @@ class RequiredDocument extends Model
             ->exists();
     }
 
-    /**
-     * الحصول على الوثائق المطلوبة لدور معين
-     */
     public static function getRequiredForRole($role)
     {
         return self::where('user_role', $role)
@@ -63,19 +44,14 @@ class RequiredDocument extends Model
             ->get();
     }
 
-    /**
-     * التحقق من اكتمال وثائق المستخدم
-     */
     public static function checkUserDocumentsCompletion($userId, $role)
     {
         $requiredDocs = self::getRequiredForRole($role);
-        
         foreach ($requiredDocs as $doc) {
             if (!$doc->isUploadedByUser($userId)) {
                 return false;
             }
         }
-        
         return true;
     }
 }

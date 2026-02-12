@@ -14,30 +14,20 @@ class Review extends Model
         'reviewer_id',
         'reviewee_id',
         'rating',
-        'comment',
     ];
 
-    // العلاقات
-    
-    /**
-     * الطلب المرتبط بالتقييم
-     */
+    // ========== العلاقات ==========
+
     public function order()
     {
         return $this->belongsTo(Order::class);
     }
 
-    /**
-     * المستخدم الذي قدم التقييم
-     */
     public function reviewer()
     {
         return $this->belongsTo(User::class, 'reviewer_id');
     }
 
-    /**
-     * المستخدم الذي تلقى التقييم
-     */
     public function reviewee()
     {
         return $this->belongsTo(User::class, 'reviewee_id');

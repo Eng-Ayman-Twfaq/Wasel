@@ -15,11 +15,8 @@ class SearchHistory extends Model
         'results_count',
     ];
 
-    // العلاقات
-    
-    /**
-     * المستخدم الذي أجرى البحث
-     */
+    // ========== العلاقات ==========
+
     public function user()
     {
         return $this->belongsTo(User::class);

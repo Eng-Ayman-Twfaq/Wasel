@@ -13,6 +13,7 @@ class Invoice extends Model
         'order_id',
         'store_id',
         'customer_store_id',
+        'invoice_type',
         'total_amount',
         'invoice_status',
         'sent_at',
@@ -23,43 +24,30 @@ class Invoice extends Model
         'sent_at' => 'datetime',
     ];
 
-    // العلاقات
-    
-    /**
-     * الطلب المرتبط بالفاتورة
-     */
+    // ========== العلاقات ==========
+
     public function order()
     {
         return $this->belongsTo(Order::class);
     }
 
-    /**
-     * المحل البائع (التاجر)
-     */
     public function merchant()
     {
         return $this->belongsTo(Store::class, 'store_id');
     }
 
-    /**
-     * المحل المشتري (البقالة)
-     */
     public function customer()
     {
         return $this->belongsTo(Store::class, 'customer_store_id');
     }
 
-    /**
-     * المعاملات المالية للفاتورة
-     */
     public function transactions()
     {
         return $this->hasMany(Transaction::class);
     }
 
-    /**
-     * الحصول على المبلغ المدفوع
-     */
+    // ========== طرق المساعدة ==========
+
     public function getPaidAmountAttribute()
     {
         return $this->transactions()
@@ -67,19 +55,28 @@ class Invoice extends Model
             ->sum('amount');
     }
 
-    /**
-     * الحصول على المبلغ المتبقي
-     */
     public function getRemainingAmountAttribute()
     {
         return $this->total_amount - $this->paid_amount;
     }
 
-    /**
-     * التحقق إذا كانت الفاتورة مدفوعة بالكامل
-     */
     public function getIsPaidAttribute()
     {
         return $this->remaining_amount <= 0;
+    }
+
+    public static function createMasterInvoice(Order $order)
+    {
+        $totalProducts = $order->orderDetails()->sum('subtotal');
+        $grandTotal = $totalProducts + $order->delivery_fee;
+
+        return self::create([
+            'order_id' => $order->id,
+            'store_id' => null,
+            'customer_store_id' => $order->store_id,
+            'invoice_type' => 'master',
+            'total_amount' => $grandTotal,
+            'invoice_status' => 'بانتظار',
+        ]);
     }
 }

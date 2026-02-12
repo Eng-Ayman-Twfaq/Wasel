@@ -18,19 +18,13 @@ class PaymentMethod extends Model
         'is_active' => 'boolean',
     ];
 
-    // العلاقات
-    
-    /**
-     * الطلبات التي استخدمت طريقة الدفع هذه
-     */
+    // ========== العلاقات ==========
+
     public function orders()
     {
         return $this->hasMany(Order::class);
     }
 
-    /**
-     * المعاملات المالية التي استخدمت طريقة الدفع هذه
-     */
     public function transactions()
     {
         return $this->hasMany(Transaction::class);

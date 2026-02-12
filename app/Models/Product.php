@@ -12,12 +12,10 @@ class Product extends Model
 
     protected $fillable = [
         'store_id',
-        'category_id',
         'name',
         'description',
         'price',
-        'icon',
-        'color_code',
+        // 'image_url',
         'is_available',
     ];
 
@@ -26,61 +24,35 @@ class Product extends Model
         'is_available' => 'boolean',
     ];
 
-    protected $dates = ['deleted_at'];
+    // ========== العلاقات ==========
 
-    // العلاقات
-    
-    /**
-     * المحل الذي يبيع المنتج
-     */
     public function store()
     {
         return $this->belongsTo(Store::class);
     }
 
-    /**
-     * التصنيف الذي ينتمي إليه المنتج
-     */
-    public function category()
-    {
-        return $this->belongsTo(Category::class);
-    }
-
-    /**
-     * عناصر السلة التي تحتوي على هذا المنتج
-     */
     public function cartItems()
     {
         return $this->hasMany(CartItem::class);
     }
 
-    /**
-     * تفاصيل الطلبات التي تحتوي على هذا المنتج
-     */
     public function orderDetails()
     {
         return $this->hasMany(OrderDetail::class);
     }
 
-    /**
-     * المستخدمون الذين أضافوا المنتج للمفضلة
-     */
     public function favoritedBy()
     {
         return $this->hasMany(Favorite::class);
     }
 
-    /**
-     * العروض والتخفيضات على المنتج
-     */
     public function offers()
     {
         return $this->hasMany(Offer::class);
     }
 
-    /**
-     * الحصول على السعر بعد الخصم (إذا كان هناك عرض)
-     */
+    // ========== طرق المساعدة ==========
+
     public function getDiscountedPriceAttribute()
     {
         $activeOffer = $this->offers()
@@ -96,7 +68,6 @@ class Product extends Model
                 return max(0, $this->price - $activeOffer->discount_value);
             }
         }
-
         return $this->price;
     }
 }

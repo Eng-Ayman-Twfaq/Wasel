@@ -15,27 +15,20 @@ class CartItem extends Model
         'quantity',
     ];
 
-    // العلاقات
-    
-    /**
-     * المستخدم الذي أضاف المنتج للسلة
-     */
+    // ========== العلاقات ==========
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * المنتج في السلة
-     */
     public function product()
     {
         return $this->belongsTo(Product::class);
     }
 
-    /**
-     * حساب السعر الإجمالي للعنصر
-     */
+    // ========== طرق المساعدة ==========
+
     public function getTotalPriceAttribute()
     {
         return $this->product->discounted_price * $this->quantity;

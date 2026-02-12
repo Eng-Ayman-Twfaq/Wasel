@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -14,202 +13,137 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
-        'name',
-        'phone',
-        'email',
-        'password',
-        'role',
-        'owner_type',
-        'identification_number',
-        'area_id',
-        'device_id',
-        'registration_status',
-        'is_active',
+        'first_name', 'father_name', 'grandfather_name', 'last_name',
+        'gender', 'birth_date', 'nationality', 'phone', 'email', 'password',
+        'address', 'id_card_type', 'id_number', 'issue_date', 'expiry_date',
+        'place_of_issue', 'location_latitude', 'location_longitude',
+        'role', 'owner_type', 'area_id', 'device_id',
+        'registration_status', 'is_active'
     ];
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    protected $hidden = ['password', 'remember_token'];
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'birth_date' => 'date',
+        'issue_date' => 'date',
+        'expiry_date' => 'date',
         'is_active' => 'boolean',
     ];
 
-    protected $dates = ['deleted_at'];
+    protected $appends = ['full_name'];
 
-    // العلاقات
-    
-    /**
-     * المنطقة التابع لها المستخدم
-     */
+    public function getFullNameAttribute()
+    {
+        return trim("{$this->first_name} {$this->father_name} {$this->grandfather_name} {$this->last_name}");
+    }
+
+    // ========== العلاقات ==========
+
     public function area()
     {
         return $this->belongsTo(Area::class);
     }
 
-    /**
-     * المحلات التي يمتلكها المستخدم
-     */
     public function stores()
     {
         return $this->hasMany(Store::class);
     }
 
-    /**
-     * الوثائق المرفوعة من قبل المستخدم
-     */
     public function uploadedDocuments()
     {
         return $this->hasMany(UserUploadedDocument::class);
     }
 
-    /**
-     * إذا كان المستخدم ضمن فريق الدعم
-     */
+    public function devices()
+    {
+        return $this->hasMany(UserDevice::class);
+    }
+
     public function supportTeam()
     {
         return $this->hasOne(SupportTeam::class);
     }
 
-    /**
-     * عناصر السلة الخاصة بالمستخدم
-     */
     public function cartItems()
     {
         return $this->hasMany(CartItem::class);
     }
 
-    /**
-     * الطلبات التي أنشأها المستخدم (إذا كان صاحب محل بقالة)
-     */
     public function orders()
     {
-        return $this->hasManyThrough(Order::class, Store::class);
+        return $this->hasManyThrough(Order::class, Store::class, 'user_id', 'store_id');
     }
 
-    /**
-     * التقييمات التي قدمها المستخدم
-     */
     public function reviewsGiven()
     {
         return $this->hasMany(Review::class, 'reviewer_id');
     }
 
-    /**
-     * التقييمات التي تلقاها المستخدم
-     */
     public function reviewsReceived()
     {
         return $this->hasMany(Review::class, 'reviewee_id');
     }
 
-    /**
-     * المنتجات المفضلة للمستخدم
-     */
     public function favorites()
     {
         return $this->hasMany(Favorite::class);
     }
 
-    /**
-     * سجل البحث للمستخدم
-     */
     public function searchHistories()
     {
         return $this->hasMany(SearchHistory::class);
     }
 
-    /**
-     * الإشعارات الخاصة بالمستخدم
-     */
     public function notifications()
     {
         return $this->hasMany(Notification::class);
     }
 
-    /**
-     * عمليات التوصيل المكلف بها المستخدم (إذا كان مندوب توصيل)
-     */
     public function deliveries()
     {
         return $this->hasMany(Delivery::class, 'assigned_to');
     }
 
-    /**
-     * تحديد إذا كان المستخدم مديراً
-     */
+    // ========== طرق المساعدة ==========
+
     public function isAdmin()
     {
         return $this->role === 'مدير';
     }
 
-    /**
-     * تحديد إذا كان المستخدم ضمن فريق الدعم
-     */
     public function isSupport()
     {
         return $this->role === 'دعم';
     }
 
-    /**
-     * تحديد إذا كان المستخدم مالك محل
-     */
     public function isStoreOwner()
     {
         return $this->role === 'مالك_محل';
     }
 
-    /**
-     * تحديد إذا كان الحساب موافقاً عليه
-     */
     public function isApproved()
     {
-        return $this->registration_status === 'موافق';
+        return $this->registration_status === 'موافق' && $this->is_active;
     }
 
-    // في نهاية نموذج User، أضف هذه الطريقة:
-
-/**
- * الحصول على حالة وثائق المستخدم
- */
-public function getDocumentsStatusAttribute()
-{
-    $requiredDocs = RequiredDocument::getRequiredForRole($this->role);
-    $uploadedDocs = $this->uploadedDocuments;
-    
-    $status = [
-        'total_required' => $requiredDocs->count(),
-        'uploaded' => 0,
-        'approved' => 0,
-        'pending' => 0,
-        'rejected' => 0,
-        'is_complete' => false,
-        'missing_docs' => [],
-    ];
-    
-    // حساب الوثائق المرفوعة
-    foreach ($requiredDocs as $requiredDoc) {
-        $uploadedDoc = $uploadedDocs->where('document_type', $requiredDoc->document_type)->first();
-        
-        if ($uploadedDoc) {
-            $status['uploaded']++;
-            
-            if ($uploadedDoc->is_approved) {
-                $status['approved']++;
-            } elseif ($uploadedDoc->is_pending) {
-                $status['pending']++;
-            } elseif ($uploadedDoc->is_rejected) {
-                $status['rejected']++;
-            }
-        } else {
-            $status['missing_docs'][] = $requiredDoc->document_name;
-        }
+    public function isCurrentDeviceApproved($deviceId)
+    {
+        return $this->devices()
+            ->where('device_id', $deviceId)
+            ->where('is_approved', true)
+            ->exists();
     }
-    
-    $status['is_complete'] = $status['approved'] === $status['total_required'];
-    
-    return $status;
-}
+
+    public function requestDeviceApproval($deviceId, $deviceName = null)
+    {
+        return $this->devices()->updateOrCreate(
+            ['device_id' => $deviceId],
+            [
+                'device_name' => $deviceName,
+                'is_approved' => false,
+                'last_login_at' => now(),
+            ]
+        );
+    }
 }

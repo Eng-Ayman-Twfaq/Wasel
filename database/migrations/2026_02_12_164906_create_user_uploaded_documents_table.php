@@ -13,7 +13,7 @@ return new class extends Migration
             $table->unsignedBigInteger('user_id');
             $table->string('document_type');
             $table->string('document_number');
-            $table->string('document_image_url');
+            $table->text('document_image_url');
             $table->unsignedBigInteger('verified_by')->nullable();
             $table->timestamp('verified_at')->nullable();
             $table->enum('verification_status', ['بانتظار', 'موافق', 'مرفوض'])->default('بانتظار');

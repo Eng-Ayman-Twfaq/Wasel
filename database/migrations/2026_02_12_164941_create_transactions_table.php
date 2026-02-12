@@ -15,11 +15,7 @@ return new class extends Migration
             $table->unsignedBigInteger('payment_method_id');
             $table->dateTime('transaction_date');
             $table->string('reference')->nullable();
-            $table->enum('status', [
-                'ناجحة',
-                'فشلت',
-                'قيد_الانتظار'
-            ])->default('قيد_الانتظار');
+            $table->enum('status', ['ناجحة', 'فشلت', 'قيد_الانتظار'])->default('قيد_الانتظار');
             $table->timestamps();
         });
     }

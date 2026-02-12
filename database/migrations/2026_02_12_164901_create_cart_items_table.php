@@ -14,6 +14,8 @@ return new class extends Migration
             $table->unsignedBigInteger('product_id');
             $table->integer('quantity')->default(1);
             $table->timestamps();
+            
+            $table->unique(['user_id', 'product_id']);
         });
     }
 

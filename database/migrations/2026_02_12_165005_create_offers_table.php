@@ -11,10 +11,7 @@ return new class extends Migration
         Schema::create('offers', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('product_id');
-            $table->enum('discount_type', [
-                'نسبة_مئوية',
-                'مبلغ_ثابت'
-            ])->default('نسبة_مئوية');
+            $table->enum('discount_type', ['نسبة_مئوية', 'مبلغ_ثابت']);
             $table->decimal('discount_value', 10, 2);
             $table->date('start_date');
             $table->date('end_date');

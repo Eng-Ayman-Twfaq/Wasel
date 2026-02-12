@@ -14,27 +14,18 @@ class SupportTeam extends Model
         'area_id',
     ];
 
-    // العلاقات
-    
-    /**
-     * عضو فريق الدعم (المستخدم)
-     */
+    // ========== العلاقات ==========
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * المنطقة المسؤول عنها
-     */
     public function area()
     {
         return $this->belongsTo(Area::class);
     }
 
-    /**
-     * الطلبات التي أشرف عليها فريق الدعم
-     */
     public function orders()
     {
         return $this->hasMany(Order::class);

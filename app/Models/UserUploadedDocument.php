@@ -24,64 +24,41 @@ class UserUploadedDocument extends Model
         'verified_at' => 'datetime',
     ];
 
-    // العلاقات
-    
-    /**
-     * المستخدم الذي رفع الوثيقة
-     */
+    // ========== العلاقات ==========
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * المستخدم الذي تحقق من الوثيقة
-     */
     public function verifiedBy()
     {
         return $this->belongsTo(User::class, 'verified_by');
     }
 
-    /**
-     * نوع الوثيقة المطلوبة (المرجع)
-     */
     public function requiredDocument()
     {
         return $this->belongsTo(RequiredDocument::class, 'document_type', 'document_type');
     }
 
-    /**
-     * الحصول على اسم الوثيقة من الجدول المرجعي
-     */
+    // ========== طرق المساعدة ==========
+
     public function getDocumentNameAttribute()
     {
-        if ($this->requiredDocument) {
-            return $this->requiredDocument->document_name;
-        }
-        
-        return $this->document_type;
+        return $this->requiredDocument?->document_name ?? $this->document_type;
     }
 
-    /**
-     * التحقق إذا كانت الوثيقة مقبولة
-     */
-    public function getIsApprovedAttribute()
+    public function isApproved()
     {
         return $this->verification_status === 'موافق';
     }
 
-    /**
-     * التحقق إذا كانت الوثيقة مرفوضة
-     */
-    public function getIsRejectedAttribute()
+    public function isRejected()
     {
         return $this->verification_status === 'مرفوض';
     }
 
-    /**
-     * التحقق إذا كانت الوثيقة قيد الانتظار
-     */
-    public function getIsPendingAttribute()
+    public function isPending()
     {
         return $this->verification_status === 'بانتظار';
     }

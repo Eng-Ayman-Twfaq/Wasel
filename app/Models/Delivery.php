@@ -23,19 +23,13 @@ class Delivery extends Model
         'delivered_at' => 'datetime',
     ];
 
-    // العلاقات
-    
-    /**
-     * الطلب المرتبط بالتوصيل
-     */
+    // ========== العلاقات ==========
+
     public function order()
     {
         return $this->belongsTo(Order::class);
     }
 
-    /**
-     * مندوب التوصيل المكلف
-     */
     public function deliveryMan()
     {
         return $this->belongsTo(User::class, 'assigned_to');

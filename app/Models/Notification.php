@@ -22,27 +22,20 @@ class Notification extends Model
         'is_read' => 'boolean',
     ];
 
-    // العلاقات
-    
-    /**
-     * المستخدم الذي تلقى الإشعار
-     */
+    // ========== العلاقات ==========
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * تحديد الإشعار كمقروء
-     */
+    // ========== طرق المساعدة ==========
+
     public function markAsRead()
     {
         $this->update(['is_read' => true]);
     }
 
-    /**
-     * تحديد الإشعار كغير مقروء
-     */
     public function markAsUnread()
     {
         $this->update(['is_read' => false]);

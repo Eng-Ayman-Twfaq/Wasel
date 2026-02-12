@@ -13,12 +13,7 @@ return new class extends Migration
             $table->unsignedBigInteger('order_id');
             $table->unsignedBigInteger('assigned_to')->nullable();
             $table->string('delivery_man_phone')->nullable();
-            $table->enum('status', [
-                'بانتظار',
-                'تم_الاستلام',
-                'في_الطريق',
-                'تم_التسليم'
-            ])->default('بانتظار');
+            $table->enum('status', ['بانتظار', 'تم_الاستلام', 'في_الطريق', 'تم_التسليم'])->default('بانتظار');
             $table->timestamp('picked_up_at')->nullable();
             $table->timestamp('delivered_at')->nullable();
             $table->timestamps();

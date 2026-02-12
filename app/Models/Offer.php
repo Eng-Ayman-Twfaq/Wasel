@@ -25,22 +25,18 @@ class Offer extends Model
         'is_active' => 'boolean',
     ];
 
-    // العلاقات
-    
-    /**
-     * المنتج الذي ينطبق عليه العرض
-     */
+    // ========== العلاقات ==========
+
     public function product()
     {
         return $this->belongsTo(Product::class);
     }
 
-    /**
-     * تحديد إذا كان العرض نشطاً حالياً
-     */
+    // ========== طرق المساعدة ==========
+
     public function getIsCurrentlyActiveAttribute()
     {
-        return $this->is_active && 
+        return $this->is_active &&
                now()->between($this->start_date, $this->end_date);
     }
 }

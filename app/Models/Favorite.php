@@ -14,19 +14,13 @@ class Favorite extends Model
         'product_id',
     ];
 
-    // العلاقات
-    
-    /**
-     * المستخدم الذي أضاف المنتج للمفضلة
-     */
+    // ========== العلاقات ==========
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * المنتج المضاف للمفضلة
-     */
     public function product()
     {
         return $this->belongsTo(Product::class);

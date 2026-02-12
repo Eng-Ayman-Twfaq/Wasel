@@ -23,27 +23,18 @@ class OrderDetail extends Model
         'subtotal' => 'decimal:2',
     ];
 
-    // العلاقات
-    
-    /**
-     * الطلب الذي ينتمي إليه التفصيل
-     */
+    // ========== العلاقات ==========
+
     public function order()
     {
         return $this->belongsTo(Order::class);
     }
 
-    /**
-     * المنتج في التفصيل
-     */
     public function product()
     {
         return $this->belongsTo(Product::class);
     }
 
-    /**
-     * المحل الذي يبيع المنتج
-     */
     public function store()
     {
         return $this->belongsTo(Store::class);

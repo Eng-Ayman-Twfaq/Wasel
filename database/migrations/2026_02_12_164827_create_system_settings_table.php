@@ -12,12 +12,7 @@ return new class extends Migration
             $table->id();
             $table->string('key')->unique();
             $table->text('value');
-            $table->enum('type', [
-                'نص',
-                'رقم',
-                'قيمة_منطقية',
-                'جسون'
-            ])->default('نص');
+            $table->enum('type', ['نص', 'رقم', 'قيمة_منطقية', 'جسون'])->default('نص');
             $table->string('group')->default('عام');
             $table->text('description')->nullable();
             $table->boolean('is_editable')->default(true);

@@ -8,16 +8,18 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::create('favorites', function (Blueprint $table) {
+        Schema::create('reviews', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('order_id');
+            $table->unsignedBigInteger('reviewer_id');
+            $table->unsignedBigInteger('reviewee_id');
+            $table->tinyInteger('rating');
             $table->timestamps();
         });
     }
 
     public function down()
     {
-        Schema::dropIfExists('favorites');
+        Schema::dropIfExists('reviews');
     }
 };

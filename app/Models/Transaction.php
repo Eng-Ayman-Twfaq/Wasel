@@ -23,19 +23,13 @@ class Transaction extends Model
         'transaction_date' => 'datetime',
     ];
 
-    // العلاقات
-    
-    /**
-     * الفاتورة المرتبطة بالمعاملة
-     */
+    // ========== العلاقات ==========
+
     public function invoice()
     {
         return $this->belongsTo(Invoice::class);
     }
 
-    /**
-     * طريقة الدفع المستخدمة
-     */
     public function paymentMethod()
     {
         return $this->belongsTo(PaymentMethod::class);
