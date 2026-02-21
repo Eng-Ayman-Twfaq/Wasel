@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('phone')->unique();
             $table->string('email')->nullable();
             $table->string('password');
-            $table->text('address');
+            $table->text('address')->nullable();
             $table->enum('id_card_type', ['هوية_وطنية', 'جواز_سفر', 'بطاقة_عائلية']);
             $table->string('id_number')->unique();
             $table->date('issue_date');

@@ -146,4 +146,20 @@ class User extends Authenticatable
             ]
         );
     }
+
+    /**
+ * الحصول على محاولات التحقق الخاصة بالمستخدم
+ */
+    public function phoneVerifications()
+    {
+        return $this->hasMany(PhoneVerification::class, 'phone', 'phone');
+    }
+
+    /**
+     * التحقق مما إذا كان رقم الهاتف موثقاً
+     */
+    public function isPhoneVerified(): bool
+    {
+        return !is_null($this->phone_verified_at);
+    }
 }
