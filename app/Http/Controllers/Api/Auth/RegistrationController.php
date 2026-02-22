@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class RegistrationController extends Controller
 {
@@ -31,6 +32,16 @@ class RegistrationController extends Controller
             'birth_date' => 'required|date|before:today',
             'nationality' => 'required|string|max:255',
             'phone' => 'required|string|unique:users,phone|regex:/^([0-9\s\-\+\(\)]*)$/|min:10|max:15',
+    //         'phone' => [
+    // 'required',
+    // 'string',
+    // 'regex:/^([0-9\s\-\+\(\)]*)$/',
+    // 'min:10',
+    // 'max:15',
+    // Rule::unique('users', 'phone')->where(function ($query) {
+    //     return $query->where('is_active', 1);
+    // }),
+// ],
             // للارقام اليمينة
 //             'phone' => [
 //     'required',
@@ -407,7 +418,7 @@ class RegistrationController extends Controller
                 'owner_type' => $tempData['owner_type'],
                 'area_id' => $tempData['area_id'],
                 'password' => Hash::make($request->password),
-                // 'address' => "a",
+                 'address' => $tempData['address'] ?? '',
                 'registration_status' => 'بانتظار_الوثائق',
                 'is_active' => false,
             ]);
