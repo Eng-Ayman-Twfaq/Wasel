@@ -162,4 +162,41 @@ class User extends Authenticatable
     {
         return !is_null($this->phone_verified_at);
     }
+
+      /**
+     * العلاقة مع الأجهزة
+     * (One to Many)
+     */
+    // public function devices()
+    // {
+    //     return $this->hasMany(UserDevice::class);
+    // }
+
+    /**
+     * العلاقة مع محاولات التحقق
+     * (One to Many)
+     */
+    public function deviceVerificationAttempts()
+    {
+        return $this->hasMany(DeviceVerificationAttempt::class);
+    }
+
+    /**
+     * الحصول على الأجهزة الموثوقة
+     */
+    public function trustedDevices()
+    {
+        return $this->devices()->where('is_approved', true);
+    }
+
+    /**
+     * التحقق مما إذا كان الجهاز موثوقاً
+     */
+    public function isTrustedDevice($deviceId)
+    {
+        return $this->devices()
+                    ->where('device_id', $deviceId)
+                    ->where('is_approved', true)
+                    ->exists();
+    }
 }

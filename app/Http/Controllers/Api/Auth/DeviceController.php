@@ -52,7 +52,7 @@ class DeviceController extends Controller
                     'user_id' => $userId,
                     'device_id' => $request->device_id,
                     'device_name' => $request->device_name,
-                    'is_approved' => false, // يحتاج موافقة
+                    'is_approved' => true, // يحتاج موافقة
                     'last_login_at' => now(),
                 ]);
                 $isNewDevice = true;

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Auth\DeviceController;
 use App\Http\Controllers\Api\Auth\RegistrationController;
+use App\Http\Controllers\Api\Auth\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -36,4 +37,14 @@ Route::prefix('auth')->group(function () {
         Route::post('approve-device/{deviceId}', [DeviceController::class, 'approveDevice']);
         Route::delete('revoke-device/{deviceId}', [DeviceController::class, 'revokeDevice']);
     // });
+
+
+    Route::post('login', [AuthController::class, 'login']);
+    Route::post('verify-device', [AuthController::class, 'verifyDevice']);
+    Route::post('resend-code', [AuthController::class, 'resendVerificationCode']);
+    
+    // المسارات المحمية
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('logout', [AuthController::class, 'logout']);
+    });
 });

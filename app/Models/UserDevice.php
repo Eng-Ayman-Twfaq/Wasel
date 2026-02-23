@@ -13,6 +13,7 @@ class UserDevice extends Model
         'user_id',
         'device_id',
         'device_name',
+        'fcm_token',
         'is_approved',
         'approved_by',
         'approved_at',
@@ -46,5 +47,26 @@ class UserDevice extends Model
             'approved_by' => $userId,
             'approved_at' => now(),
         ]);
+    }
+
+     
+   
+
+    
+
+    /**
+     * Scope للأجهزة الموثوقة
+     */
+    public function scopeApproved($query)
+    {
+        return $query->where('is_approved', true);
+    }
+
+    /**
+     * Scope للأجهزة المنتظرة
+     */
+    public function scopePending($query)
+    {
+        return $query->where('is_approved', false);
     }
 }
