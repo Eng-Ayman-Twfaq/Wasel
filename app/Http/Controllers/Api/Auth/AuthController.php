@@ -74,21 +74,67 @@ class AuthController extends Controller
     /**
      * معالجة تسجيل الدخول حسب حالة الجهاز
      */
-    private function handleDeviceLogin($user, $device, $request)
-    {
-        // حالة 1: جهاز موثوق ومعتمد
-        if ($device && $device->is_approved) {
-            return $this->handleTrustedDevice($user, $device, $request);
+    /**
+ * معالجة تسجيل الدخول حسب حالة الجهاز
+ */
+/**
+ * معالجة تسجيل الدخول حسب حالة الجهاز
+ */
+/**
+ * معالجة تسجيل الدخول حسب حالة الجهاز
+ */
+private function handleDeviceLogin($user, $device, $request)
+{
+    // ✅ التحقق من عدد محاولات إعادة الإرسال للجهاز الحالي
+    $resendCount = DeviceVerificationAttempt::where('user_id', $user->id)
+        ->where('device_id', $request->device_id)
+        ->count();
+
+    // إذا وصل إلى 3 محاولات إعادة إرسال، يتم حظر الوصول فوراً
+    if ($resendCount >= 3) {
+        return response()->json([
+            'success' => false,
+            'message' => 'تم حظر هاتفك يرجى التواصل مع فريق الدعم',
+            'data' => [
+                'is_blocked' => true,
+                'reason' => 'تجاوز عدد محاولات إعادة إرسال رمز التحقق'
+            ]
+        ], 403);
+    }
+
+    // حالة 1: جهاز موثوق ومعتمد
+    if ($device && $device->is_approved) {
+        return $this->handleTrustedDevice($user, $device, $request);
+    }
+
+    // حالة 2: جهاز مسجل ولكن غير معتمد
+    if ($device && !$device->is_approved) {
+        // ✅ التحقق من وجود محاولة تحقق ناجحة لهذا الجهاز
+        $verifiedAttempt = DeviceVerificationAttempt::where('user_id', $user->id)
+            ->where('device_id', $request->device_id)
+            ->where('status', 'verified')
+            ->first();
+
+        // إذا كان هناك تحقق ناجح سابق، نعرض رسالة "غير مفعل"
+        if ($verifiedAttempt) {
+            return response()->json([
+                'success' => false,
+                'message' => 'جهازك غير مفعل للوصول إلى التطبيق، يرجى التواصل مع فريق الدعم',
+                'data' => [
+                    'device_status' => 'pending_approval',
+                    'device_id' => $device->device_id,
+                    'support_contact' => 'support@wasel.com'
+                ]
+            ], 403);
         }
 
-        // حالة 2: جهاز مسجل ولكن غير معتمد
-        if ($device && !$device->is_approved) {
-            return $this->handleUnapprovedDevice($user, $device, $request);
-        }
-
-        // حالة 3: جهاز جديد تماماً
+        // إذا لم يكن هناك تحقق ناجح (أي لا يزال في مرحلة التحقق)، نرسل رمز تحقق جديد
         return $this->handleNewDevice($user, $request);
     }
+
+    // حالة 3: جهاز جديد تماماً
+    return $this->handleNewDevice($user, $request);
+}
 
     /**
      * معالجة جهاز موثوق
@@ -136,85 +182,90 @@ class AuthController extends Controller
      */
     private function handleUnapprovedDevice($user, $device, $request)
     {
-        // التحقق من وجود محاولة تحقق سابقة غير منتهية
-        $existingVerification = DeviceVerificationAttempt::where('user_id', $user->id)
-            ->where('device_id', $request->device_id)
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
-            ->first();
-
-        if ($existingVerification) {
-            return response()->json([
-                'success' => true,
-                'requires_verification' => true,
-                'message' => 'يرجى إدخال رمز التحقق المرسل',
-                'data' => [
-                    'device_id' => $request->device_id,
-                    'phone' => $this->maskPhoneNumber($user->phone),
-                    'expires_in' => now()->diffInSeconds($existingVerification->expires_at),
-                    'attempts_remaining' => $existingVerification->max_attempts - $existingVerification->attempts
-                ]
-            ]);
-        }
-
-        // إنشاء رمز تحقق جديد
-        $verification = $this->createVerificationCode($user, $request);
-
-        // إرسال رمز التحقق عبر SMS
-        $this->sendVerificationSMS($user->phone, $verification->verification_code);
-
-        // إرسال إشعار للأجهزة الموثوقة
-        $this->notifyTrustedDevices($user, $request);
-
-        return response()->json([
-            'success' => true,
-            'requires_verification' => true,
-            'message' => 'تم إرسال رمز التحقق إلى هاتفك',
-            'data' => [
-                'device_id' => $request->device_id,
-                'phone' => $this->maskPhoneNumber($user->phone),
-                'expires_in' => 300, // 5 دقائق
-                'attempts_remaining' => 3
-            ]
+        // تحديث آخر محاولة دخول
+        $device->update([
+            'last_login_at' => now(),
+            'device_name' => $request->device_name ?? $device->device_name
         ]);
+
+        // تسجيل محاولة دخول لجهاز غير معتمد
+        $this->logSecurityEvent($user->id, 'unapproved_device_login_attempt', [
+            'device_id' => $device->device_id,
+            'device_name' => $device->device_name,
+            'ip' => $request->ip()
+        ]);
+
+        // رسالة للمستخدم بأن الجهاز غير مفعل
+        return response()->json([
+            'success' => false,
+            'message' => 'جهازك غير مفعل للوصول إلى التطبيق، يرجى التواصل مع فريق الدعم',
+            'data' => [
+                'device_status' => $device->is_approved,//'pending_approval',
+                'device_id' => $device->device_id,
+                'support_contact' => 'support@wasel.com' // يمكنك وضع رقم الدعم هنا
+            ]
+        ], 403); // 403 Forbidden
     }
 
-    /**
-     * معالجة جهاز جديد
-     */
-    private function handleNewDevice($user, $request)
-    {
-        // إنشاء سجل جهاز جديد (غير معتمد)
-        $device = UserDevice::create([
+  /**
+ * معالجة جهاز جديد
+ */
+/**
+ * معالجة جهاز جديد
+ */
+private function handleNewDevice($user, $request)
+{
+    // ✅ استخدام updateOrCreate بدلاً من create لتجنب duplicate entry
+    $device = UserDevice::updateOrCreate(
+        [
             'user_id' => $user->id,
-            'device_id' => $request->device_id,
+            'device_id' => $request->device_id
+        ],
+        [
             'device_name' => $request->device_name ?? 'جهاز غير معروف',
             'is_approved' => false,
             'last_login_at' => now()
-        ]);
+        ]
+    );
 
-        // إنشاء رمز تحقق
-        $verification = $this->createVerificationCode($user, $request);
+    // إلغاء المحاولات السابقة المعلقة
+    DeviceVerificationAttempt::where('user_id', $user->id)
+        ->where('device_id', $request->device_id)
+        ->where('status', 'pending')
+        ->update(['status' => 'expired']);
 
-        // إرسال رمز التحقق عبر SMS
-        $this->sendVerificationSMS($user->phone, $verification->verification_code);
+    // إنشاء رمز تحقق جديد
+    $verification = DeviceVerificationAttempt::create([
+        'user_id' => $user->id,
+        'device_id' => $request->device_id,
+        'device_name' => $request->device_name ?? 'جهاز غير معروف',
+        'verification_code' => $this->generateVerificationCode(),
+        'ip_address' => $request->ip(),
+        'attempts' => 0,
+        'max_attempts' => 3,
+        'expires_at' => now()->addMinutes(2),
+        'status' => 'pending'
+    ]);
 
-        // إرسال إشعار للأجهزة الموثوقة
-        $this->notifyTrustedDevices($user, $request);
+    // إرسال رمز التحقق عبر SMS
+    $this->sendVerificationSMS($user->phone, $verification->verification_code);
 
-        return response()->json([
-            'success' => true,
-            'requires_verification' => true,
-            'message' => 'تم إرسال رمز التحقق إلى هاتفك',
-            'data' => [
-                'device_id' => $request->device_id,
-                'phone' => $this->maskPhoneNumber($user->phone),
-                'expires_in' => 300,
-                'attempts_remaining' => 3
-            ]
-        ]);
-    }
+    // إرسال إشعار للأجهزة الموثوقة
+    $this->notifyTrustedDevices($user, $request);
 
+    return response()->json([
+        'success' => true,
+        'requires_verification' => true,
+        'message' => 'تم إرسال رمز التحقق إلى هاتفك',
+        'data' => [
+            'device_id' => $request->device_id,
+            'device_name' => $device->device_name,
+            'phone' => $this->maskPhoneNumber($user->phone),
+            'expires_in' => 120,
+            'attempts_remaining' => 3
+        ]
+    ]);
+}
     /**
      * التحقق من رمز الجهاز
      * 
@@ -222,160 +273,187 @@ class AuthController extends Controller
      * @bodyParam device_id string required معرف الجهاز
      * @bodyParam verification_code string required رمز التحقق
      */
-    public function verifyDevice(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'phone' => 'required|string',
-            'device_id' => 'required|string',
-            'verification_code' => 'required|string|size:6'
-        ]);
+    /**
+ * التحقق من رمز الجهاز
+ * 
+ * @bodyParam phone string required رقم الهاتف
+ * @bodyParam device_id string required معرف الجهاز
+ * @bodyParam verification_code string required رمز التحقق
+ */
+/**
+ * التحقق من رمز الجهاز
+ */
+public function verifyDevice(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'phone' => 'required|string',
+        'device_id' => 'required|string',
+        'verification_code' => 'required|string|size:6'
+    ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'خطأ في البيانات المدخلة',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $user = User::where('phone', $request->phone)->first();
-        
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'المستخدم غير موجود'
-            ], 404);
-        }
-
-        // البحث عن محاولة التحقق
-        $verification = DeviceVerificationAttempt::where('user_id', $user->id)
-            ->where('device_id', $request->device_id)
-            ->where('verification_code', $request->verification_code)
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
-            ->first();
-
-        if (!$verification) {
-            // زيادة عدد المحاولات للمحاولة الموجودة
-            $failedAttempt = DeviceVerificationAttempt::where('user_id', $user->id)
-                ->where('device_id', $request->device_id)
-                ->where('status', 'pending')
-                ->first();
-
-            if ($failedAttempt) {
-                $failedAttempt->incrementAttempts();
-                
-                if ($failedAttempt->status === 'blocked') {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'تم تجاوز عدد المحاولات المسموحة، يرجى طلب رمز جديد'
-                    ], 429);
-                }
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'رمز التحقق غير صحيح'
-            ], 400);
-        }
-
-        // تحديث حالة التحقق
-        $verification->update([
-            'status' => 'verified',
-            'verified_at' => now()
-        ]);
-
-        // تحديث الجهاز
-        $device = UserDevice::updateOrCreate(
-            [
-                'user_id' => $user->id,
-                'device_id' => $request->device_id
-            ],
-            [
-                'device_name' => $request->device_name ?? 'جهاز غير معروف',
-                'is_approved' => false, // يبقى غير معتمد حتى موافقة المشرف
-                'last_login_at' => now()
-            ]
-        );
-
-        // إنشاء توكن مؤقت (صلاحية محدودة)
-        $temporaryToken = $user->createToken('temp_token_' . $device->device_id, ['*'], now()->addHours(24))->plainTextToken;
-
-        // إرسال إشعار للمشرفين
-        $this->notifyAdminsForApproval($user, $device);
-
-        // إرسال إشعار للمستخدم
-        $this->notifyUserDevicePending($user, $device);
-
+    if ($validator->fails()) {
         return response()->json([
-            'success' => true,
-            'message' => 'تم التحقق بنجاح، في انتظار موافقة المشرف',
-            'data' => [
-                'requires_admin_approval' => true,
-                'temporary_token' => $temporaryToken,
-                'device' => [
-                    'id' => $device->id,
-                    'status' => 'pending_approval'
-                ]
-            ]
-        ]);
+            'success' => false,
+            'message' => 'خطأ في البيانات المدخلة',
+            'errors' => $validator->errors()
+        ], 422);
     }
 
-    /**
-     * إعادة إرسال رمز التحقق
-     */
-    public function resendVerificationCode(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'phone' => 'required|string',
-            'device_id' => 'required|string'
-        ]);
+    $user = User::where('phone', $request->phone)->first();
+    
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'المستخدم غير موجود'
+        ], 404);
+    }
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'خطأ في البيانات المدخلة',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+    // البحث عن محاولة التحقق النشطة
+    $verification = DeviceVerificationAttempt::where('user_id', $user->id)
+        ->where('device_id', $request->device_id)
+        ->where('status', 'pending')
+        ->latest()
+        ->first();
 
-        $user = User::where('phone', $request->phone)->first();
+    if (!$verification) {
+        return response()->json([
+            'success' => false,
+            'message' => 'لم يتم طلب رمز تحقق لهذا الجهاز'
+        ], 400);
+    }
+
+    // التحقق من صلاحية الكود (دقيقتان)
+    if (Carbon::parse($verification->expires_at)->isPast()) {
+        $verification->update(['status' => 'expired']);
+        return response()->json([
+            'success' => false,
+            'message' => 'انتهت صلاحية رمز التحقق (دقيقتان). يرجى طلب رمز جديد'
+        ], 400);
+    }
+
+    // التحقق من صحة الكود
+    if ($verification->verification_code !== $request->verification_code) {
+        // زيادة عدد المحاولات الفاشلة
+        $verification->incrementAttempts();
         
-        if (!$user) {
+        // إذا وصل إلى 3 محاولات خاطئة لهذا الكود، يتم حظر هذه المحاولة فقط
+        if ($verification->attempts >= 3) {
+            // تحديث حالة المحاولة إلى blocked
+            $verification->update(['status' => 'blocked']);
+
             return response()->json([
                 'success' => false,
-                'message' => 'المستخدم غير موجود'
-            ], 404);
-        }
-
-        // التحقق من عدم وجود طلب متكرر خلال دقيقة
-        $lastAttempt = DeviceVerificationAttempt::where('user_id', $user->id)
-            ->where('device_id', $request->device_id)
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-        if ($lastAttempt && $lastAttempt->created_at->diffInSeconds(now()) < 60) {
-            return response()->json([
-                'success' => false,
-                'message' => 'يرجى الانتظار دقيقة قبل طلب رمز جديد'
+                'message' => 'لقد تجاوزت عدد المحاولات المسموحة (3 مرات). يرجى طلب رمز تحقق جديد'
             ], 429);
         }
 
-        // إنشاء رمز جديد
-        $verification = $this->createVerificationCode($user, $request);
-
-        // إرسال SMS
-        $this->sendVerificationSMS($user->phone, $verification->verification_code);
+        // المحاولات المتبقية
+        $attemptsLeft = 3 - $verification->attempts;
 
         return response()->json([
-            'success' => true,
-            'message' => 'تم إرسال رمز تحقق جديد',
+            'success' => false,
+            'message' => 'رمز التحقق غير صحيح',
             'data' => [
-                'expires_in' => 300,
-                'attempts_remaining' => 3
+                'attempts_remaining' => $attemptsLeft,
+                'expires_in' => now()->diffInSeconds($verification->expires_at)
             ]
-        ]);
+        ], 400);
     }
+
+    // كود صحيح - أكمل العملية
+    // تحديث حالة التحقق
+    $verification->update([
+        'status' => 'verified',
+        'verified_at' => now()
+    ]);
+
+    // تحديث الجهاز (يبقى غير معتمد حتى موافقة المشرف)
+    $device = UserDevice::updateOrCreate(
+        [
+            'user_id' => $user->id,
+            'device_id' => $request->device_id
+        ],
+        [
+            'device_name' => $verification->device_name ?? 'جهاز غير معروف',
+            'is_approved' => false,
+            'last_login_at' => now()
+        ]
+    );
+
+    // إرسال إشعار للمشرفين للموافقة على الجهاز
+    $this->notifyAdminsForApproval($user, $device);
+
+    // إرسال إشعار للمستخدم بانتظار الموافقة
+    $this->notifyUserDevicePending($user, $device);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'تم التحقق من الجهاز بنجاح. سيتم تفعيل جهازك بعد موافقة فريق الدعم. يرجى تسجيل الدخول مرة أخرى لاحقاً.',
+        'data' => [
+            'device_id' => $device->device_id,
+            'device_status' => 'pending_approval',
+            'requires_relogin' => true
+        ]
+    ]);
+}
+
+ /**
+ * إعادة إرسال رمز التحقق
+ */
+public function resendVerificationCode(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'phone' => 'required|string',
+        'device_id' => 'required|string',
+        'device_name' => 'nullable|string|max:255'
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'خطأ في البيانات المدخلة',
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    $user = User::where('phone', $request->phone)->first();
+    
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'المستخدم غير موجود'
+        ], 404);
+    }
+
+    // حساب عدد محاولات إعادة الإرسال (كل المحاولات السابقة)
+    $resendCount = DeviceVerificationAttempt::where('user_id', $user->id)
+        ->where('device_id', $request->device_id)
+        ->count();
+
+    // إذا وصل إلى 3 محاولات سابقة، نمنع إعادة الإرسال
+    if ($resendCount >= 3) {
+        return response()->json([
+            'success' => false,
+            'message' => 'لقد استنفذت عدد محاولات إعادة الإرسال (3 مرات). يرجى التواصل مع فريق الدعم'
+        ], 429);
+    }
+
+    // إنشاء رمز جديد
+    $verification = $this->createVerificationCode($user, $request);
+
+    // إرسال SMS
+    $this->sendVerificationSMS($user->phone, $verification->verification_code);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'تم إرسال رمز تحقق جديد',
+        'data' => [
+            'expires_in' => 120,
+            'attempts_remaining' => 3,
+            'resend_attempts_left' => 3 - ($resendCount + 1)
+        ]
+    ]);
+}
 
     /**
      * تسجيل الخروج
@@ -400,28 +478,30 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * إنشاء رمز تحقق جديد
-     */
-    private function createVerificationCode($user, $request)
-    {
-        // إلغاء المحاولات السابقة
-        DeviceVerificationAttempt::where('user_id', $user->id)
-            ->where('device_id', $request->device_id)
-            ->where('status', 'pending')
-            ->update(['status' => 'expired']);
+  /**
+ * إنشاء رمز تحقق جديد
+ */
+private function createVerificationCode($user, $request)
+{
+    // إلغاء المحاولات السابقة
+    DeviceVerificationAttempt::where('user_id', $user->id)
+        ->where('device_id', $request->device_id)
+        ->where('status', 'pending')
+        ->update(['status' => 'expired']);
 
-        // إنشاء رمز جديد
-        return DeviceVerificationAttempt::create([
-            'user_id' => $user->id,
-            'device_id' => $request->device_id,
-            'device_name' => $request->device_name,
-            'verification_code' => $this->generateVerificationCode(),
-            'ip_address' => $request->ip(),
-            'expires_at' => now()->addMinutes(5),
-            'status' => 'pending'
-        ]);
-    }
+    // إنشاء رمز جديد (صلاحية دقيقتين)
+    return DeviceVerificationAttempt::create([
+        'user_id' => $user->id,
+        'device_id' => $request->device_id,
+        'device_name' => $request->device_name,
+        'verification_code' => $this->generateVerificationCode(),
+        'ip_address' => $request->ip(),
+        'attempts' => 0,
+        'max_attempts' => 3, // 3 محاولات كحد أقصى
+        'expires_at' => now()->addMinutes(2), // دقيقتين صلاحية
+        'status' => 'pending'
+    ]);
+}
 
     /**
      * توليد رمز تحقق عشوائي
@@ -595,4 +675,19 @@ class AuthController extends Controller
             'is_active' => $user->is_active
         ];
     }
+
+    /**
+ * حساب الوقت المتبقي بالثواني
+ */
+private function getRemainingSeconds($expiresAt)
+{
+    $now = now();
+    $expires = Carbon::parse($expiresAt);
+    
+    if ($expires->gt($now)) {
+        return $expires->diffInSeconds($now);
+    }
+    
+    return 0;
+}
 }

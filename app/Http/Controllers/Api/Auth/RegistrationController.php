@@ -125,69 +125,141 @@ class RegistrationController extends Controller
         }
     }
 
-    /**
-     * المرحلة 2: التحقق من رمز الهاتف
-     */
-    public function verifyPhone(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'phone' => 'required|string',
-            'code' => 'required|string|size:6',
-            'temp_token' => 'required|string'
-        ], [
-            'phone.required' => 'رقم الجوال مطلوب',
-            'code.required' => 'رمز التحقق مطلوب',
-            'code.size' => 'رمز التحقق يجب أن يكون 6 أرقام',
-            'temp_token.required' => 'رمز الجلسة مطلوب'
+ /**
+ * المرحلة 2: التحقق من رمز الهاتف
+ */
+public function verifyPhone(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'phone' => 'required|string',
+        'code' => 'required|string|size:6',
+        'temp_token' => 'required|string'
+    ], [
+        'phone.required' => 'رقم الجوال مطلوب',
+        'code.required' => 'رمز التحقق مطلوب',
+        'code.size' => 'رمز التحقق يجب أن يكون 6 أرقام',
+        'temp_token.required' => 'رمز الجلسة مطلوب'
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'status' => false,
+            'message' => 'خطأ في التحقق من البيانات',
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    try {
+        // 🔹 جلب بيانات التسجيل من الكاش
+        $tempData = cache()->get('registration_' . $request->temp_token);
+
+        if (!$tempData) {
+            return response()->json([
+                'status' => false,
+                'message' => 'انتهت صلاحية الجلسة، يرجى البدء من جديد'
+            ], 400);
+        }
+
+        // 🔹 التأكد أن رقم الهاتف مطابق للجلسة
+        if (!isset($tempData['phone']) || $tempData['phone'] !== $request->phone) {
+            return response()->json([
+                'status' => false,
+                'message' => 'رقم الجوال غير مطابق لبيانات التسجيل'
+            ], 400);
+        }
+
+        // 🔹 البحث عن محاولة التحقق النشطة
+        $verification = PhoneVerification::where('phone', $request->phone)
+            ->where('status', 'pending')
+            ->latest()
+            ->first();
+
+        if (!$verification) {
+            return response()->json([
+                'status' => false,
+                'message' => 'لم يتم طلب رمز تحقق لهذا الرقم'
+            ], 400);
+        }
+
+        // 🔹 التحقق من صلاحية الكود (دقيقتان)
+        if (Carbon::parse($verification->expires_at)->isPast()) {
+            $verification->update(['status' => 'expired']);
+            return response()->json([
+                'status' => false,
+                'message' => 'انتهت صلاحية رمز التحقق (دقيقتان). يرجى طلب رمز جديد'
+            ], 400);
+        }
+
+        // 🔹 التحقق من صحة الكود
+        if ($verification->code !== $request->code) {
+            // زيادة عدد المحاولات الفاشلة
+            $verification->incrementAttempts();
+            
+            // إذا وصل إلى 3 محاولات خاطئة لهذا الكود
+            if ($verification->attempts >= 3) {
+                $verification->update(['status' => 'blocked']);
+                
+                // ✅ التحقق من عدد الأكواد المرسلة لهذا الرقم
+                $totalCodesCount = PhoneVerification::where('phone', $request->phone)->count();
+                
+                // إذا كان عدد الأكواد المرسلة أكثر من 3، نمنع إرسال المزيد
+                if ($totalCodesCount >= 3) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'تم حظر هاتفك يرجى التواصل مع فريق الدعم',
+                        'data' => [
+                            'is_blocked' => true,
+                            'reason' => 'تجاوز عدد محاولات إعادة إرسال رمز التحقق'
+                        ]
+                    ], 403);
+                }
+                
+                return response()->json([
+                    'status' => false,
+                    'message' => 'لقد تجاوزت عدد المحاولات المسموحة (3 مرات). يرجى طلب رمز جديد'
+                ], 429);
+            }
+
+            // المحاولات المتبقية
+            $attemptsLeft = 3 - $verification->attempts;
+
+            return response()->json([
+                'status' => false,
+                'message' => 'رمز التحقق غير صحيح',
+                'data' => [
+                    'attempts_remaining' => $attemptsLeft,
+                    'expires_in' => now()->diffInSeconds($verification->expires_at)
+                ]
+            ], 400);
+        }
+
+        // 🔹 كود صحيح - تحديث حالة التحقق
+        $verification->update([
+            'status' => 'verified',
+            'verified_at' => now()
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => false,
-                'message' => 'خطأ في التحقق من البيانات',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        // 🔹 تحديث الكاش بأن الهاتف موثق
+        $tempData['phone_verified'] = true;
+        cache()->put('registration_' . $request->temp_token, $tempData, now()->addMinutes(30));
 
-        try {
-            $verified = PhoneVerification::verifyCode($request->phone, $request->code);
+        return response()->json([
+            'status' => true,
+            'message' => 'تم التحقق من رقم الجوال بنجاح',
+            'data' => [
+                'temp_token' => $request->temp_token,
+                'next_step' => 2
+            ]
+        ], 200);
 
-            if (!$verified) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'رمز التحقق غير صحيح أو منتهي الصلاحية'
-                ], 400);
-            }
-
-            // تحديث cache بأن الهاتف موثق
-            $tempData = cache()->get('registration_' . $request->temp_token);
-            if (!$tempData) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'انتهت صلاحية الجلسة، يرجى البدء من جديد'
-                ], 400);
-            }
-
-            $tempData['phone_verified'] = true;
-            cache()->put('registration_' . $request->temp_token, $tempData, now()->addMinutes(30));
-
-            return response()->json([
-                'status' => true,
-                'message' => 'تم التحقق من رقم الجوال بنجاح',
-                'data' => [
-                    'temp_token' => $request->temp_token,
-                    'next_step' => 2 // الانتقال إلى خطوة رفع المستندات
-                ]
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => 'حدث خطأ أثناء التحقق',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => false,
+            'message' => 'حدث خطأ أثناء التحقق',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * المرحلة 3: رفع المستندات وبيانات الهوية
@@ -622,6 +694,12 @@ class RegistrationController extends Controller
 /**
  * نسخة محسنة مع ميزات إضافية
  */
+/**
+ * إعادة إرسال رمز التحقق
+ */
+/**
+ * إعادة إرسال رمز التحقق
+ */
 public function resendVerificationCode(Request $request)
 {
     $validator = Validator::make($request->all(), [
@@ -676,104 +754,66 @@ public function resendVerificationCode(Request $request)
                 $remainingSeconds = 60 - $timeSinceLastRequest;
                 return response()->json([
                     'status' => false,
-                    'message' => 'يرجى الانتظار قبل طلب رمز جديد',
+                    'message' => 'يرجى الانتظار دقيقة قبل طلب رمز جديد',
                     'data' => [
-                        'remaining_seconds' => $remainingSeconds,
-                        'can_resend_after' => Carbon::now()->addSeconds($remainingSeconds)->toIso8601String(),
-                        'current_code_still_valid' => true,
-                        'code_expires_at' => $lastVerification->expires_at
+                        'remaining_seconds' => $remainingSeconds
                     ]
                 ], 429);
             }
         }
 
-        // إحصائيات المحاولات
-        $today = Carbon::now()->startOfDay();
-        $attemptsToday = PhoneVerification::where('phone', $request->phone)
-            ->where('created_at', '>=', $today)
-            ->count();
+        // حساب عدد محاولات إعادة الإرسال
+        $resendCount = PhoneVerification::where('phone', $request->phone)->count();
 
-        $attemptsThisHour = PhoneVerification::where('phone', $request->phone)
-            ->where('created_at', '>=', Carbon::now()->subHour())
-            ->count();
-
-        // التحقق من الحدود
-        $limits = [
-            'per_hour' => 3,
-            'per_day' => 10
-        ];
-
-        if ($attemptsThisHour >= $limits['per_hour']) {
-            $nextHourTime = Carbon::now()->addHour()->startOfHour();
+        // إذا وصل إلى 3 محاولات سابقة، نمنع إعادة الإرسال
+        if ($resendCount >= 3) {
             return response()->json([
                 'status' => false,
-                'message' => 'لقد تجاوزت الحد الأقصى للمحاولات في الساعة',
-                'data' => [
-                    'limit_type' => 'hourly',
-                    'max_attempts_per_hour' => $limits['per_hour'],
-                    'next_attempt_time' => $nextHourTime->toIso8601String(),
-                    'minutes_remaining' => ceil(Carbon::now()->diffInMinutes($nextHourTime))
-                ]
+                'message' => 'لقد استنفذت عدد محاولات إعادة الإرسال (3 مرات). يرجى التواصل مع فريق الدعم'
             ], 429);
         }
 
-        if ($attemptsToday >= $limits['per_day']) {
-            $nextDayTime = Carbon::now()->addDay()->startOfDay();
-            return response()->json([
-                'status' => false,
-                'message' => 'لقد تجاوزت الحد الأقصى للمحاولات اليومية',
-                'data' => [
-                    'limit_type' => 'daily',
-                    'max_attempts_per_day' => $limits['per_day'],
-                    'next_attempt_time' => $nextDayTime->toIso8601String(),
-                    'hours_remaining' => ceil(Carbon::now()->diffInHours($nextDayTime))
-                ]
-            ], 429);
-        }
-
-        // إنشاء رمز جديد (دالة createVerification تقوم تلقائياً بإلغاء الرموز السابقة)
+        // إنشاء رمز جديد
         $verification = PhoneVerification::createVerification(
             $request->phone,
             $request->ip(),
             [
                 'user_agent' => $request->userAgent(),
-                'attempts_today' => $attemptsToday + 1,
-                'attempts_this_hour' => $attemptsThisHour + 1
+                'resend' => true
             ]
         );
 
-        // محاكاة إرسال SMS (يمكنك استبدالها بخدمة حقيقية)
-        // $this->sendSms($request->phone, $verification->code);
+        // إرسال SMS
+        // sendSMS($request->phone, $verification->code);
 
         return response()->json([
             'status' => true,
             'message' => 'تم إعادة إرسال رمز التحقق بنجاح',
             'data' => [
                 'phone' => $request->phone,
-                'code' => $verification->code, // للإنتاج، قم بإزالة هذا الحقل
-                'expires_at' => $verification->expires_at,
-                'expires_in_minutes' => 5,
-                'stats' => [
-                    'attempts_today' => $attemptsToday + 1,
-                    'attempts_this_hour' => $attemptsThisHour + 1,
-                    'remaining_today' => $limits['per_day'] - ($attemptsToday + 1),
-                    'remaining_this_hour' => $limits['per_hour'] - ($attemptsThisHour + 1)
-                ],
-                'limits' => $limits
+                'code' => $verification->code, // أزله في الإنتاج
+                'expires_in' => 120,
+                'attempts_remaining' => 3,
+                'resend_attempts_left' => 3 - ($resendCount + 1)
             ]
         ], 200);
 
     } catch (\Exception $e) {
+        if ($e->getMessage() === 'لقد استنفذت عدد محاولات إعادة الإرسال (3 مرات). يرجى التواصل مع فريق الدعم') {
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage()
+            ], 429);
+        }
+
         Log::error('Error resending verification code: ' . $e->getMessage(), [
             'phone' => $request->phone,
-            'temp_token' => $request->temp_token,
-            'trace' => $e->getTraceAsString()
+            'temp_token' => $request->temp_token
         ]);
 
         return response()->json([
             'status' => false,
-            'message' => 'حدث خطأ أثناء إرسال رمز التحقق',
-            'error' => config('app.debug') ? $e->getMessage() : 'يرجى المحاولة مرة أخرى لاحقاً'
+            'message' => 'حدث خطأ أثناء إرسال رمز التحقق'
         ], 500);
     }
 }

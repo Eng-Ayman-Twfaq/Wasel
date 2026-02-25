@@ -10,11 +10,6 @@ class PhoneVerification extends Model
 {
     use HasFactory;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'phone',
         'code',
@@ -27,11 +22,6 @@ class PhoneVerification extends Model
         'verified_at',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'device_info' => 'array',
         'expires_at' => 'datetime',
@@ -39,14 +29,6 @@ class PhoneVerification extends Model
         'attempts' => 'integer',
         'max_attempts' => 'integer',
     ];
-
-    /**
-     * الحصول على المستخدم المرتبط برقم الهاتف
-     */
-    public function user()
-    {
-        return $this->belongsTo(User::class, 'phone', 'phone');
-    }
 
     /**
      * التحقق مما إذا كان الرمز منتهي الصلاحية
@@ -87,13 +69,6 @@ class PhoneVerification extends Model
         $this->status = 'verified';
         $this->verified_at = Carbon::now();
         $this->save();
-        
-        // تحديث حقل phone_verified_at في جدول المستخدمين
-        if ($this->user) {
-            $this->user->update([
-                'phone_verified_at' => Carbon::now()
-            ]);
-        }
     }
 
     /**
@@ -109,48 +84,88 @@ class PhoneVerification extends Model
      */
     public static function createVerification(string $phone, string $ipAddress = null, array $deviceInfo = null): self
     {
+        // حساب عدد محاولات إعادة الإرسال (كل المحاولات السابقة)
+        $resendCount = self::where('phone', $phone)->count();
+        
+        // إذا وصل إلى 3 محاولات سابقة، نمنع إنشاء رمز جديد
+        if ($resendCount >= 3) {
+            throw new \Exception('لقد استنفذت عدد محاولات إعادة الإرسال (3 مرات). يرجى التواصل مع فريق الدعم');
+        }
+
         // إلغاء أي محاولات سابقة معلقة
-        static::where('phone', $phone)
+        self::where('phone', $phone)
             ->where('status', 'pending')
             ->update(['status' => 'expired']);
         
-        return static::create([
+        return self::create([
             'phone' => $phone,
-            'code' => static::generateCode(),
+            'code' => self::generateCode(),
             'attempts' => 0,
-            'max_attempts' => 5,
+            'max_attempts' => 3, // ✅ 3 محاولات فقط
             'status' => 'pending',
             'ip_address' => $ipAddress,
             'device_info' => $deviceInfo,
-            'expires_at' => Carbon::now()->addMinutes(5), // الرمز صالح لـ 5 دقائق
+            'expires_at' => Carbon::now()->addMinutes(2), // ✅ دقيقتان صلاحية
         ]);
     }
 
     /**
      * التحقق من الرمز
      */
-    public static function verifyCode(string $phone, string $code): bool
+    public static function verifyCode(string $phone, string $code): array
     {
-        $verification = static::where('phone', $phone)
+        $verification = self::where('phone', $phone)
             ->where('status', 'pending')
             ->latest()
             ->first();
         
         if (!$verification) {
-            return false;
+            return [
+                'success' => false,
+                'message' => 'لم يتم طلب رمز تحقق لهذا الرقم'
+            ];
         }
-        
-        if (!$verification->canAttempt()) {
-            return false;
+
+        // التحقق من صلاحية الكود
+        if ($verification->isExpired()) {
+            $verification->update(['status' => 'expired']);
+            return [
+                'success' => false,
+                'message' => 'انتهت صلاحية رمز التحقق (دقيقتان). يرجى طلب رمز جديد'
+            ];
         }
-        
+
+        // التحقق من صحة الكود
         if ($verification->code !== $code) {
             $verification->incrementAttempts();
-            return false;
+            
+            // إذا وصل إلى 3 محاولات خاطئة، نمنع المزيد
+            if ($verification->attempts >= 3) {
+                $verification->update(['status' => 'blocked']);
+                
+                return [
+                    'success' => false,
+                    'message' => 'لقد تجاوزت عدد المحاولات المسموحة (3 مرات). يرجى طلب رمز جديد',
+                    'blocked' => true
+                ];
+            }
+
+            $attemptsLeft = 3 - $verification->attempts;
+            return [
+                'success' => false,
+                'message' => 'رمز التحقق غير صحيح',
+                'attempts_remaining' => $attemptsLeft,
+                'expires_in' => Carbon::now()->diffInSeconds($verification->expires_at)
+            ];
         }
-        
+
+        // كود صحيح
         $verification->markAsVerified();
-        return true;
+        
+        return [
+            'success' => true,
+            'message' => 'تم التحقق بنجاح'
+        ];
     }
 
     /**
