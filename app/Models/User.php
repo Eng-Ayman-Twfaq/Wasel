@@ -44,12 +44,16 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Area::class);
     }
-
-    public function stores()
-    {
-        return $this->hasMany(Store::class);
-    }
-
+// لدية اكثر من متجر 
+    // public function stores()
+    // {
+    //     return $this->hasMany(Store::class);
+    // }
+// لدية متجر واحد فقط 
+public function store()
+{
+    return $this->hasOne(Store::class);
+}
     public function uploadedDocuments()
     {
         return $this->hasMany(UserUploadedDocument::class);

@@ -50,14 +50,14 @@ class AuthController extends Controller
         if (!$user || !Hash::check($request->password, $user->password)) {
             return $this->handleFailedLogin($request);
         }
-
+        // $user->load('store');
         // 4. التحقق من حالة المستخدم
-        if (!$user->is_active) {
-            return response()->json([
-                'success' => false,
-                'message' => 'الحساب غير نشط، يرجى التواصل مع الدعم'
-            ], 403);
-        }
+        // if (!$user->is_active) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'الحساب غير نشط، يرجى التواصل مع الدعم'
+        //     ], 403);
+        // }
 
         // 5. البحث عن الجهاز
         $device = UserDevice::where('user_id', $user->id)
@@ -66,7 +66,7 @@ class AuthController extends Controller
 
         // 6. تسجيل الدخول (بدون إنشاء توكن حتى نكمل التحقق)
         Auth::login($user);
-
+            $user->load('store');
         // 7. معالجة حالة الجهاز
         return $this->handleDeviceLogin($user, $device, $request);
     }
@@ -170,6 +170,7 @@ private function handleDeviceLogin($user, $device, $request)
                 'token' => $token,
                 'device' => [
                     'id' => $device->id,
+                    'name' =>$device->device_name,
                     'is_approved' => true,
                     'last_login' => $device->last_login_at
                 ]
@@ -672,7 +673,17 @@ private function createVerificationCode($user, $request)
             'phone' => $user->phone,
             'email' => $user->email,
             'role' => $user->role,
-            'is_active' => $user->is_active
+            'is_active' => $user->is_active,
+            // 👇 الإضافة الجديدة
+        'store_type' => optional($user->store)->store_type,
+        'store_is_approved' => optional($user->store)->is_approved,
+        'store_id' => optional($user->store)->id,
+        // 'device_approved'=>optional($user->de)
+//         'account_status' => [
+//     'user_active' => $user->is_active,
+//     'store_approved' => optional($user->store)->is_approved,
+//     'device_approved' => true,
+// ],
         ];
     }
 
