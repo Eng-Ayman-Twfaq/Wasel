@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\Auth\DeviceController;
 use App\Http\Controllers\Api\Auth\RegistrationController;
 use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\Marketplace\MarketplaceController;
+use App\Http\Controllers\Api\ProductController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -47,4 +49,18 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
     });
+
+
+   
+// تحكم التاجر
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::apiResource('products', ProductController::class);
+    });
+
+    Route::middleware('auth:sanctum')->prefix('market')->group(function () {
+    Route::get('/products', [MarketplaceController::class, 'products']);
+    Route::get('/products/nearby', [MarketplaceController::class, 'nearbyProducts']);
+    Route::get('/traders', [MarketplaceController::class, 'traders']);
+    Route::get('/traders/nearby', [MarketplaceController::class, 'nearbyTraders']);
+});
 });

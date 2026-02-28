@@ -15,13 +15,23 @@ class Product extends Model
         'name',
         'description',
         'price',
-        // 'image_url',
+        'quantity',
+        'low_stock_threshold',
+        'unit_type',
+        'pieces_per_unit',
+        'allow_partial_unit',
+        'min_order_quantity',
         'is_available',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
+        'quantity' => 'integer',
+        'low_stock_threshold' => 'integer',
+        'pieces_per_unit' => 'integer',
+        'allow_partial_unit' => 'boolean',
         'is_available' => 'boolean',
+        'min_order_quantity' => 'decimal:2',
     ];
 
     // ========== العلاقات ==========
@@ -53,6 +63,49 @@ class Product extends Model
 
     // ========== طرق المساعدة ==========
 
+    /**
+     * حساب الكمية المتوفرة بالوحدات (مثلاً: عدد الكراتين المتوفرة)
+     */
+    public function getAvailableUnitsAttribute()
+    {
+        if ($this->pieces_per_unit == 0) return 0;
+        return floor($this->quantity / $this->pieces_per_unit);
+    }
+
+    /**
+     * التحقق من توفر كمية محددة
+     */
+    public function isQuantityAvailable($requestedQuantity)
+    {
+        $requestedPieces = $requestedQuantity * $this->pieces_per_unit;
+        return $this->quantity >= $requestedPieces;
+    }
+
+    /**
+     * خصم الكمية من المخزون
+     */
+    public function deductStock($quantity)
+    {
+        $piecesToDeduct = $quantity * $this->pieces_per_unit;
+        $this->decrement('quantity', $piecesToDeduct);
+        
+        // تحديث حالة التوفر إذا نفذ المخزون
+        if ($this->quantity <= 0) {
+            $this->update(['is_available' => false]);
+        }
+    }
+
+    /**
+     * التحقق مما إذا كان المخزون منخفضًا
+     */
+    public function getIsLowStockAttribute()
+    {
+        return $this->quantity <= $this->low_stock_threshold;
+    }
+
+    /**
+     * الحصول على السعر بعد الخصم
+     */
     public function getDiscountedPriceAttribute()
     {
         $activeOffer = $this->offers()
@@ -69,5 +122,58 @@ class Product extends Model
             }
         }
         return $this->price;
+    }
+
+    /**
+     * حساب سعر كمية محددة مع مراعاة الخصومات
+     */
+    public function calculateTotalPrice($quantity)
+    {
+        $unitPrice = $this->getDiscountedPriceAttribute();
+        return $quantity * $unitPrice;
+    }
+
+    // ========== Scopes ==========
+
+    /**
+     * المنتجات المتوفرة فقط
+     */
+    public function scopeAvailable($query)
+    {
+        return $query->where('is_available', true)
+                     ->where('quantity', '>', 0);
+    }
+
+    /**
+     * المنتجات منخفضة المخزون
+     */
+    public function scopeLowStock($query)
+    {
+        return $query->whereColumn('quantity', '<=', 'low_stock_threshold')
+                     ->where('quantity', '>', 0);
+    }
+
+    /**
+     * المنتجات النافدة
+     */
+    public function scopeOutOfStock($query)
+    {
+        return $query->where('quantity', '<=', 0);
+    }
+
+    /**
+     * المنتجات حسب نوع الوحدة
+     */
+    public function scopeOfUnitType($query, $unitType)
+    {
+        return $query->where('unit_type', $unitType);
+    }
+
+    /**
+     * المنتجات التي تسمح ببيع أجزاء من الوحدة
+     */
+    public function scopeAllowPartial($query)
+    {
+        return $query->where('allow_partial_unit', true);
     }
 }

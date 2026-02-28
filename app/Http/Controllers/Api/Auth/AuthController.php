@@ -141,6 +141,16 @@ private function handleDeviceLogin($user, $device, $request)
      */
     private function handleTrustedDevice($user, $device, $request)
     {
+         // 🔥 حذف التوكن القديم الخاص بهذا الجهاز فقط
+        $user->tokens()
+            ->where('name', 'auth_token_' . $device->device_id)
+            ->delete();
+
+        // إنشاء توكن جديد مربوط بالجهاز
+        $token = $user->createToken(
+            'auth_token_' . $device->device_id
+        )->plainTextToken;
+        
         // تحديث آخر دخول
         $device->update([
             'last_login_at' => now(),
@@ -153,7 +163,7 @@ private function handleDeviceLogin($user, $device, $request)
         }
 
         // إنشاء توكن دخول
-        $token = $user->createToken('auth_token_' . $device->device_id)->plainTextToken;
+        // $token = $user->createToken('auth_token_' . $device->device_id)->plainTextToken;
 
         // تسجيل حدث الدخول
         $this->logSecurityEvent($user->id, 'successful_login', [

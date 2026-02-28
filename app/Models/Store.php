@@ -93,4 +93,25 @@ class Store extends Model
     {
         return $this->is_approved && !$this->trashed();
     }
+
+    // حساب المسافة بالكيلومتر (Haversine)
+public function scopeNearby($query, $latitude, $longitude, $radius = 10)
+{
+    $haversine = "(6371.0088 * acos(
+        cos(radians(?)) *
+        cos(radians(latitude)) *
+        cos(radians(longitude) - radians(?)) +
+        sin(radians(?)) *
+        sin(radians(latitude))
+    ))";
+
+    return $query->select('*')
+        ->selectRaw("$haversine AS distance", [
+            $latitude,
+            $longitude,
+            $latitude
+        ])
+        ->having('distance', '<=', $radius)
+        ->orderBy('distance', 'asc');
+}
 }
