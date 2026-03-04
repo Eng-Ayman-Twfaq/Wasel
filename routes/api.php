@@ -54,6 +54,7 @@ Route::prefix('auth')->group(function () {
    
 // تحكم التاجر
     Route::middleware('auth:sanctum')->group(function () {
+        Route::get('products/stats', [ProductController::class, 'stats']);
         Route::apiResource('products', ProductController::class);
     });
 

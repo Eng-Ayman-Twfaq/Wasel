@@ -29,7 +29,7 @@ class ProductController extends Controller
                 return $this->forbiddenResponse('غير مصرح لك بعرض المنتجات');
             }
 
-            $products = $user->store->products()->latest()->paginate(15);
+            $products = $user->store->products()->latest()->paginate(10);
 
             return response()->json([
                 'status' => true,
@@ -47,7 +47,67 @@ class ProductController extends Controller
             return $this->serverError();
         }
     }
+ // =========================================================
+    // ✅ إحصائيات المنتجات والعروض — GET /api/auth/products/stats
+    // =========================================================
+    public function stats()
+    {
+        try {
+            $user = Auth::user();
 
+            if (!$this->checkMerchant($user)) {
+                return $this->forbiddenResponse('غير مصرح لك بعرض الإحصائيات');
+            }
+
+            $store = $user->store;
+
+            // ✅ إحصائيات المنتجات
+            $totalProducts    = $store->products()->count();
+            $availableProducts = $store->products()
+                ->where('is_available', true)
+                ->where('quantity', '>', 0)
+                ->count();
+            $outOfStockProducts = $store->products()
+                ->where(function ($q) {
+                    $q->where('is_available', false)
+                      ->orWhere('quantity', '<=', 0);
+                })
+                ->count();
+            $lowStockProducts = $store->products()
+                ->where('is_available', true)
+                ->where('quantity', '>', 0)
+                ->whereColumn('quantity', '<=', 'low_stock_threshold')
+                ->count();
+
+            // ✅ إحصائيات العروض
+            $totalPromotions  = $store->promotions()->count();
+            $activePromotions = $store->promotions()
+                ->where('is_active', true)
+                ->where('start_date', '<=', now())
+                ->where('end_date', '>=', now())
+                ->count();
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'تم جلب الإحصائيات بنجاح',
+                'data'    => [
+                    'products' => [
+                        'total'        => $totalProducts,
+                        'available'    => $availableProducts,
+                        'out_of_stock' => $outOfStockProducts,
+                        'low_stock'    => $lowStockProducts,
+                    ],
+                    'promotions' => [
+                        'total'  => $totalPromotions,
+                        'active' => $activePromotions,
+                    ],
+                ]
+            ]);
+
+        } catch (Exception $e) {
+            return $this->serverError();
+        }
+    }
     /**
      * عرض منتج واحد
      */
