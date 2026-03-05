@@ -133,4 +133,9 @@ class Order extends Model
         $this->customer_visible = true;
         $this->save();
     }
+
+    public function merchantApprovals()
+    {
+        return $this->hasMany(OrderMerchantApproval::class);
+    }
 }

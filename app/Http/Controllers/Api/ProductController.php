@@ -213,50 +213,95 @@ class ProductController extends Controller
         }
     }
 
-    /**
-     * حذف منتج
-     */
-    public function destroy(Request $request, $id)
-    {
-        try {
+    // /**
+    //  * حذف منتج
+    //  */
+    // public function destroy(Request $request, $id)
+    // {
+    //     try {
 
-            $request->validate([
-                'password' => 'required|string'
-            ], [
-                'password.required' => 'كلمة المرور مطلوبة للتأكيد'
-            ]);
+    //         $request->validate([
+    //             'password' => 'required|string'
+    //         ], [
+    //             'password.required' => 'كلمة المرور مطلوبة للتأكيد'
+    //         ]);
 
-            $user =  Auth::user();
+    //         $user =  Auth::user();
 
-            if (!$this->checkMerchant($user)) {
-                return $this->forbiddenResponse('غير مصرح لك بالحذف');
-            }
+    //         if (!$this->checkMerchant($user)) {
+    //             return $this->forbiddenResponse('غير مصرح لك بالحذف');
+    //         }
 
-            $product = Product::where('store_id', $user->store->id)
-                              ->find($id);
+    //         $product = Product::where('store_id', $user->store->id)
+    //                           ->find($id);
 
-            if (!$product) {
-                return $this->notFoundResponse('المنتج غير موجود');
-            }
+    //         if (!$product) {
+    //             return $this->notFoundResponse('المنتج غير موجود');
+    //         }
 
-             $check = $this->verifyPassword($request->password);
+    //          $check = $this->verifyPassword($request->password);
 
+    //     if ($check !== true) {
+    //         return $check; // يرجع رسالة الخطأ تلقائياً
+    //     }
+
+    //         $product->delete();
+
+    //         return response()->json([
+    //             'status' => true,
+    //             'message' => 'تم حذف المنتج بنجاح'
+    //         ]);
+
+    //     } catch (Exception $e) {
+    //         return $this->serverError();
+    //     }
+    // }
+public function destroy(Request $request, $id)
+{
+    try {
+        $request->validate([
+            'password' => 'required|string'
+        ], [
+            'password.required' => 'كلمة المرور مطلوبة للتأكيد'
+        ]);
+
+        $user = Auth::user();
+
+        if (!$this->checkMerchant($user)) {
+            return $this->forbiddenResponse('غير مصرح لك بالحذف');
+        }
+
+        $product = Product::where('store_id', $user->store->id)
+                          ->find($id);
+
+        if (!$product) {
+            return $this->notFoundResponse('المنتج غير موجود');
+        }
+
+        // --- تحقق من وجود الطلبات المرتبطة ---
+        if ($product->orderDetails()->exists()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'لا يمكن حذف المنتج لأنه مرتبط بطلبات'
+            ], 422);
+        }
+
+        $check = $this->verifyPassword($request->password);
         if ($check !== true) {
             return $check; // يرجع رسالة الخطأ تلقائياً
         }
 
-            $product->delete();
+        $product->delete();
 
-            return response()->json([
-                'status' => true,
-                'message' => 'تم حذف المنتج بنجاح'
-            ]);
+        return response()->json([
+            'status' => true,
+            'message' => 'تم حذف المنتج بنجاح'
+        ]);
 
-        } catch (Exception $e) {
-            return $this->serverError();
-        }
+    } catch (Exception $e) {
+        return $this->serverError();
     }
-
+}
     // =========================================================
     // Helper Methods
     // =========================================================

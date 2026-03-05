@@ -3,7 +3,9 @@
 use App\Http\Controllers\Api\Auth\DeviceController;
 use App\Http\Controllers\Api\Auth\RegistrationController;
 use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\GroceryOrderController;
 use App\Http\Controllers\Api\Marketplace\MarketplaceController;
+use App\Http\Controllers\Api\MerchantOrderController;
 use App\Http\Controllers\Api\ProductController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -56,8 +58,26 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('products/stats', [ProductController::class, 'stats']);
         Route::apiResource('products', ProductController::class);
+
+
+         // stats قبل {id} لتجنب التعارض
+        Route::get('orders/stats',           [MerchantOrderController::class, 'stats']);
+        Route::get('orders',                 [MerchantOrderController::class, 'index']);
+        Route::get('orders/{id}',            [MerchantOrderController::class, 'show']);
+        Route::post('orders/{id}/approve',   [MerchantOrderController::class, 'approve']);
+        Route::post('orders/{id}/reject',    [MerchantOrderController::class, 'reject']);
     });
 
+
+    Route::middleware('auth:sanctum')->prefix('grocery')->group(function () {
+
+        Route::get('orders/stats',           [GroceryOrderController::class, 'stats']);
+        Route::get('orders',                 [GroceryOrderController::class, 'index']);
+        Route::get('orders/{id}',            [GroceryOrderController::class, 'show']);
+        Route::post('orders',                [GroceryOrderController::class, 'store']);
+        Route::post('orders/{id}/cancel',    [GroceryOrderController::class, 'cancel']);
+
+    });
     Route::middleware('auth:sanctum')->prefix('market')->group(function () {
     Route::get('/products', [MarketplaceController::class, 'products']);
     Route::get('/products/nearby', [MarketplaceController::class, 'nearbyProducts']);
