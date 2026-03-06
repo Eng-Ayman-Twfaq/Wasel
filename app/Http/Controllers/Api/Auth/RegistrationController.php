@@ -441,12 +441,12 @@ public function verifyPhone(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'temp_token' => 'required|string',
-            'password' => 'required|string|min:8|confirmed',
-            'password_confirmation' => 'required|string|min:8',
+            'password' => 'required|string|min:5|confirmed',
+            'password_confirmation' => 'required|string|min:5',
         ], [
             'temp_token.required' => 'رمز الجلسة مطلوب',
             'password.required' => 'كلمة المرور مطلوبة',
-            'password.min' => 'كلمة المرور يجب أن تكون 8 أحرف على الأقل',
+            'password.min' => 'كلمة المرور يجب أن تكون 5 أحرف على الأقل',
             'password.confirmed' => 'تأكيد كلمة المرور غير متطابق',
             'password_confirmation.required' => 'تأكيد كلمة المرور مطلوب',
         ]);

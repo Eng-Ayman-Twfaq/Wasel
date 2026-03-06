@@ -23,9 +23,21 @@ class MerchantOrderController extends Controller
     private function getMerchantStore()
     {
         $user = Auth::user();
-        if (!$user || !$user->store || !$user->store->isMerchant() || !$user->store->isActive()) {
-            return null;
-        }
+         if (!$user) {
+        throw new \Exception('المستخدم غير مسجل الدخول', 401);
+    }
+    
+    if (!$user->store) {
+        throw new \Exception('ليس لديك متجر مسجل', 403);
+    }
+    
+    if (!$user->store->isMerchant()) {
+        throw new \Exception('المتجر ليس من نوع تاجر', 403);
+    }
+    
+    if (!$user->store->isActive()) {
+        throw new \Exception('المتجر غير نشط. يرجى التواصل مع الدعم', 403);
+    }
         return $user->store;
     }
 
@@ -107,14 +119,27 @@ class MerchantOrderController extends Controller
                     'merchantApprovals' => fn($q) => $q->where('merchant_store_id', $store->id),
                 ])
                 ->latest();
-
+            
             // ✅ فلترة حسب حالة الطلب
             if ($request->filled('status')) {
                 $query->where('status', $request->status);
             }
 
             $orders = $query->paginate(10);
-
+// ✅ التحقق من وجود طلبات
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'لايوجد طلبات حاليا',
+                'data'    => [],
+                'pagination' => [
+                    'current_page' => $orders->currentPage(),
+                    'last_page'    => $orders->lastPage(),
+                    'per_page'     => $orders->perPage(),
+                    'total'        => $orders->total(),
+                ],
+            ]);
+        }
             return response()->json([
                 'status'  => true,
                 'message' => 'تم جلب الطلبات بنجاح',

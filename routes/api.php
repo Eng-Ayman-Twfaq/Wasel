@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\GroceryOrderController;
 use App\Http\Controllers\Api\Marketplace\MarketplaceController;
 use App\Http\Controllers\Api\MerchantOrderController;
+use App\Http\Controllers\Api\MerchantProfileController;
 use App\Http\Controllers\Api\ProductController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -66,6 +67,11 @@ Route::prefix('auth')->group(function () {
         Route::get('orders/{id}',            [MerchantOrderController::class, 'show']);
         Route::post('orders/{id}/approve',   [MerchantOrderController::class, 'approve']);
         Route::post('orders/{id}/reject',    [MerchantOrderController::class, 'reject']);
+
+        // ── الملف الشخصي ──
+        Route::get('profile',  [MerchantProfileController::class, 'show']);
+        Route::put('profile',  [MerchantProfileController::class, 'update']);
+        Route::put('profile/{password}',  [MerchantProfileController::class, 'changePassword']);
     });
 
 

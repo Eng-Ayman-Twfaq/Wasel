@@ -15,7 +15,7 @@ class LoginRequest extends FormRequest
     {
         return [
             'phone' => 'required|string|max:20',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:5',
             'device_id' => 'required|string',
             'device_name' => 'nullable|string|max:255',
             'fcm_token' => 'nullable|string'
@@ -27,7 +27,7 @@ class LoginRequest extends FormRequest
         return [
             'phone.required' => 'رقم الهاتف مطلوب',
             'password.required' => 'كلمة المرور مطلوبة',
-            'password.min' => 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
+            'password.min' => 'كلمة المرور يجب أن تكون 5 أحرف على الأقل',
             'device_id.required' => 'معرف الجهاز مطلوب'
         ];
     }
