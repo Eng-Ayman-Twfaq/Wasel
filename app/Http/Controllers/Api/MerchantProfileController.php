@@ -84,9 +84,9 @@ class MerchantProfileController extends Controller
                 if ($request->filled('last_name')) {
                     $userFields['last_name'] = $request->last_name;
                 }
-                if ($request->filled('phone')) {
-                    $userFields['phone'] = $request->phone;
-                }
+                // if ($request->filled('phone')) {
+                //     $userFields['phone'] = $request->phone;
+                // }
 
                 if (!empty($userFields)) {
                     $user->update($userFields);

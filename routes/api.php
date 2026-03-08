@@ -5,8 +5,10 @@ use App\Http\Controllers\Api\Auth\RegistrationController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\GroceryOrderController;
 use App\Http\Controllers\Api\Marketplace\MarketplaceController;
+use App\Http\Controllers\Api\MerchantIdentityController;
 use App\Http\Controllers\Api\MerchantOrderController;
 use App\Http\Controllers\Api\MerchantProfileController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProductController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -72,6 +74,21 @@ Route::prefix('auth')->group(function () {
         Route::get('profile',  [MerchantProfileController::class, 'show']);
         Route::put('profile',  [MerchantProfileController::class, 'update']);
         Route::put('profile/{password}',  [MerchantProfileController::class, 'changePassword']);
+// تعديل بيانات الهوية
+        Route::get('profile/identity',  [MerchantIdentityController::class, 'show']);
+        Route::put('profile/identity',  [MerchantIdentityController::class, 'update']);
+
+        // الاشعارات 
+
+        Route::get('/notifications', [NotificationController::class, 'index']);
+
+    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+
+    Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    Route::delete('/notifications/delete-all', [NotificationController::class, 'destroyAll']);
     });
 
 

@@ -26,12 +26,12 @@ class UpdateMerchantProfileRequest extends FormRequest
             'last_name'        => ['sometimes', 'string', 'max:50'],
 
             // رقم الهاتف فريد ما عدا المستخدم الحالي
-            'phone' => [
-                'sometimes',
-                'string',
-                'regex:/^[0-9]{9,15}$/',
-                "unique:users,phone,{$userId}",
-            ],
+            // 'phone' => [
+            //     'sometimes',
+            //     'string',
+            //     'regex:/^[0-9]{9,15}$/',
+            //     "unique:users,phone,{$userId}",
+            // ],
 
             // ── بيانات المتجر ──
             'store_name' => ['sometimes', 'string', 'max:100'],
@@ -49,8 +49,8 @@ class UpdateMerchantProfileRequest extends FormRequest
             'grandfather_name.max' => 'اسم الجد يجب ألا يتجاوز 50 حرفاً',
             'last_name.max'        => 'اسم العائلة يجب ألا يتجاوز 50 حرفاً',
 
-            'phone.regex'  => 'رقم الهاتف يجب أن يحتوي على أرقام فقط (9-15 رقماً)',
-            'phone.unique' => 'رقم الهاتف مستخدم بالفعل',
+            // 'phone.regex'  => 'رقم الهاتف يجب أن يحتوي على أرقام فقط (9-15 رقماً)',
+            // 'phone.unique' => 'رقم الهاتف مستخدم بالفعل',
 
             'store_name.max' => 'اسم المتجر يجب ألا يتجاوز 100 حرف',
             'address.max'    => 'العنوان يجب ألا يتجاوز 255 حرفاً',

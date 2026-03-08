@@ -175,6 +175,8 @@ public function verifyPhone(Request $request)
             ->first();
 
         if (!$verification) {
+            // حذف أي محاولات تحقق سابقة لهذا الرقم
+        // PhoneVerification::where('phone', $request->phone)->delete();
             return response()->json([
                 'status' => false,
                 'message' => 'لم يتم طلب رمز تحقق لهذا الرقم'
@@ -504,7 +506,7 @@ public function verifyPhone(Request $request)
                 'longitude' => $tempData['longitude'],
                 'address' => $tempData['address'],
                 'area_id' => $tempData['area_id'],
-                'is_approved' => false,
+                'is_approved' => true,
             ]);
 
             // حفظ المستندات

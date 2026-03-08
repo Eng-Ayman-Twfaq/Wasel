@@ -105,7 +105,7 @@ class PhoneVerification extends Model
             'status' => 'pending',
             'ip_address' => $ipAddress,
             'device_info' => $deviceInfo,
-            'expires_at' => Carbon::now()->addMinutes(2), // ✅ دقيقتان صلاحية
+            'expires_at' => Carbon::now()->addMinutes(3), // ✅ دقيقتان صلاحية
         ]);
     }
 
