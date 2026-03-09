@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateIdentityRequest;
 use App\Http\Resources\IdentityResource;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Exception;
@@ -47,14 +46,14 @@ class MerchantIdentityController extends Controller
             return response()->json([
                 'status'  => true,
                 'message' => 'تم جلب بيانات الهوية بنجاح',
-                'data'    => new IdentityResource($user), // نمرر user مباشرة
+                'data'    => new IdentityResource($user),
             ]);
 
         } catch (Exception $e) {
             return response()->json([
                 'status' => false,
                 'message' => 'حدث خطأ في الخادم',
-                'error' => $e->getMessage() // للتشخيص
+                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -81,6 +80,14 @@ class MerchantIdentityController extends Controller
                 ], 404);
             }
 
+            // ========== منع التعديل إذا كانت الحالة "موافق" ==========
+            if ($user->registration_status === 'موافق') {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'لا يمكن تعديل بيانات الهوية بعد الموافقة عليها. للتواصل مع الدعم الفني',
+                ], 403);
+            }
+
             // تحديث الحقول النصية في جدول users
             $userFields = [];
 
@@ -100,10 +107,13 @@ class MerchantIdentityController extends Controller
             $this->updateDocument($user, $request, 'back_image', 'البطاقة الشخصية (ظهر)');
             $this->updateDocument($user, $request, 'selfie_image', 'صورة شخصية مع البطاقة');
 
+            // إعادة تحميل المستندات بعد التحديث
+            $user->load('uploadedDocuments');
+
             return response()->json([
                 'status'  => true,
                 'message' => 'تم تحديث بيانات الهوية بنجاح، ستتم مراجعتها من قبل الإدارة',
-                'data'    => new IdentityResource($user->fresh('uploadedDocuments')),
+                'data'    => new IdentityResource($user),
             ]);
 
         } catch (Exception $e) {
@@ -133,14 +143,14 @@ class MerchantIdentityController extends Controller
             }
 
             // رفع الملف الجديد
-            $path = $request->file($fieldName)->store('documents/' . $user->id_number, 'public');
+            $path = $request->file($fieldName)->store('documents/' . $user->id, 'public');
 
             // إنشاء سجل جديد
             $user->uploadedDocuments()->create([
                 'document_type' => $documentType,
                 'document_number' => $user->id_number,
                 'document_image_url' => $path,
-                'verification_status' => 'بانتظار',
+                'verification_status' => 'بانتظار', // مطابق للـ enum في قاعدة البيانات
             ]);
         }
     }

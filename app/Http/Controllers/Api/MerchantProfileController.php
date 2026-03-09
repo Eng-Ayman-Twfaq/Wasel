@@ -72,18 +72,18 @@ class MerchantProfileController extends Controller
                 // ── تحديث بيانات المستخدم ──
                 $userFields = [];
 
-                if ($request->filled('first_name')) {
-                    $userFields['first_name'] = $request->first_name;
-                }
-                if ($request->filled('father_name')) {
-                    $userFields['father_name'] = $request->father_name;
-                }
-                if ($request->filled('grandfather_name')) {
-                    $userFields['grandfather_name'] = $request->grandfather_name;
-                }
-                if ($request->filled('last_name')) {
-                    $userFields['last_name'] = $request->last_name;
-                }
+                // if ($request->filled('first_name')) {
+                //     $userFields['first_name'] = $request->first_name;
+                // }
+                // if ($request->filled('father_name')) {
+                //     $userFields['father_name'] = $request->father_name;
+                // }
+                // if ($request->filled('grandfather_name')) {
+                //     $userFields['grandfather_name'] = $request->grandfather_name;
+                // }
+                // if ($request->filled('last_name')) {
+                //     $userFields['last_name'] = $request->last_name;
+                // }
                 // if ($request->filled('phone')) {
                 //     $userFields['phone'] = $request->phone;
                 // }
@@ -95,7 +95,7 @@ class MerchantProfileController extends Controller
                 // ── تحديث بيانات المتجر ──
                 if ($user->store) {
                     $storeFields = [];
-
+                
                     if ($request->filled('store_name')) {
                         $storeFields['store_name'] = $request->store_name;
                     }

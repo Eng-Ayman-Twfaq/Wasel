@@ -3,8 +3,10 @@
 use App\Http\Controllers\Api\Auth\DeviceController;
 use App\Http\Controllers\Api\Auth\RegistrationController;
 use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\GroceryOrderController;
 use App\Http\Controllers\Api\Marketplace\MarketplaceController;
+use App\Http\Controllers\Api\MerchantDeviceController;
 use App\Http\Controllers\Api\MerchantIdentityController;
 use App\Http\Controllers\Api\MerchantOrderController;
 use App\Http\Controllers\Api\MerchantProfileController;
@@ -76,7 +78,7 @@ Route::prefix('auth')->group(function () {
         Route::put('profile/{password}',  [MerchantProfileController::class, 'changePassword']);
 // تعديل بيانات الهوية
         Route::get('profile/identity',  [MerchantIdentityController::class, 'show']);
-        Route::put('profile/identity',  [MerchantIdentityController::class, 'update']);
+        Route::post('profile/identity',  [MerchantIdentityController::class, 'update']);
 
         // الاشعارات 
 
@@ -89,6 +91,14 @@ Route::prefix('auth')->group(function () {
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 
     Route::delete('/notifications/delete-all', [NotificationController::class, 'destroyAll']);
+
+    // الاجهزة
+    Route::get('/devices',        [MerchantDeviceController::class, 'index']);
+    Route::delete('/devices/{id}',[MerchantDeviceController::class, 'destroy']);
+    // لوحة التحكم بالتاجر
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    
     });
 
 

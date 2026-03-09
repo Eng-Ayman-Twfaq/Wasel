@@ -20,10 +20,10 @@ class UpdateMerchantProfileRequest extends FormRequest
 
         return [
             // ── بيانات المستخدم ──
-            'first_name'       => ['sometimes', 'string', 'max:50'],
-            'father_name'      => ['sometimes', 'string', 'max:50'],
-            'grandfather_name' => ['sometimes', 'string', 'max:50'],
-            'last_name'        => ['sometimes', 'string', 'max:50'],
+            // 'first_name'       => ['sometimes', 'string', 'max:50'],
+            // 'father_name'      => ['sometimes', 'string', 'max:50'],
+            // 'grandfather_name' => ['sometimes', 'string', 'max:50'],
+            // 'last_name'        => ['sometimes', 'string', 'max:50'],
 
             // رقم الهاتف فريد ما عدا المستخدم الحالي
             // 'phone' => [
@@ -44,10 +44,10 @@ class UpdateMerchantProfileRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'first_name.max'       => 'الاسم الأول يجب ألا يتجاوز 50 حرفاً',
-            'father_name.max'      => 'اسم الأب يجب ألا يتجاوز 50 حرفاً',
-            'grandfather_name.max' => 'اسم الجد يجب ألا يتجاوز 50 حرفاً',
-            'last_name.max'        => 'اسم العائلة يجب ألا يتجاوز 50 حرفاً',
+            // 'first_name.max'       => 'الاسم الأول يجب ألا يتجاوز 50 حرفاً',
+            // 'father_name.max'      => 'اسم الأب يجب ألا يتجاوز 50 حرفاً',
+            // 'grandfather_name.max' => 'اسم الجد يجب ألا يتجاوز 50 حرفاً',
+            // 'last_name.max'        => 'اسم العائلة يجب ألا يتجاوز 50 حرفاً',
 
             // 'phone.regex'  => 'رقم الهاتف يجب أن يحتوي على أرقام فقط (9-15 رقماً)',
             // 'phone.unique' => 'رقم الهاتف مستخدم بالفعل',

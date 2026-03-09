@@ -493,7 +493,7 @@ public function verifyPhone(Request $request)
                 'area_id' => $tempData['area_id'],
                 'password' => Hash::make($request->password),
                  'address' => $tempData['address'] ?? '',
-                'registration_status' => 'بانتظار_الوثائق',
+                'registration_status' => 'قيد_المراجعة',
                 'is_active' => false,
             ]);
 
