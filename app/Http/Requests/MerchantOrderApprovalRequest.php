@@ -16,7 +16,7 @@ class MerchantOrderApprovalRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'password' => ['required', 'string', 'min:6'],
+            'password' => ['required', 'string', 'min:5'],
         ];
     }
 
@@ -25,7 +25,7 @@ class MerchantOrderApprovalRequest extends FormRequest
         return [
             'password.required' => 'كلمة المرور مطلوبة للتأكيد',
             'password.string'   => 'كلمة المرور يجب أن تكون نصاً',
-            'password.min'      => 'كلمة المرور يجب ألا تقل عن 6 أحرف',
+            'password.min'      => 'كلمة المرور يجب ألا تقل عن 5 أحرف',
         ];
     }
 

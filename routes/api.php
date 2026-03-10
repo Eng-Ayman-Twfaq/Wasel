@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Auth\RegistrationController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\GroceryOrderController;
+use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\Marketplace\MarketplaceController;
 use App\Http\Controllers\Api\MerchantDeviceController;
 use App\Http\Controllers\Api\MerchantIdentityController;
@@ -98,7 +99,11 @@ Route::prefix('auth')->group(function () {
     // لوحة التحكم بالتاجر
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
-    
+    // الفواتير
+    Route::get('invoices',          [InvoiceController::class, 'index']);
+    Route::get('invoices/{id}',     [InvoiceController::class, 'show']);
+    Route::get('invoices/{id}/pdf', [InvoiceController::class, 'generatePdf']);
+
     });
 
 

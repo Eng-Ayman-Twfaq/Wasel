@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
+use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\OrderMerchantApproval;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +19,20 @@ use Exception;
 
 class GroceryOrderController extends Controller
 {
+    // ─────────────────────────────────────────
+    // Helper — إرسال إشعار داخلي
+    // ─────────────────────────────────────────
+    private function sendNotification(int $userId, string $title, string $body, array $data = []): void
+    {
+        Notification::create([
+            'user_id' => $userId,
+            'title'   => $title,
+            'body'    => $body,
+            'data'    => $data,
+            'is_read' => false,
+        ]);
+    }
+
     // ─────────────────────────────────────────
     // Helper — التحقق أن المستخدم بقالة نشطة
     // ─────────────────────────────────────────
@@ -31,7 +47,6 @@ class GroceryOrderController extends Controller
 
     // =========================================================
     // GET /api/auth/grocery/orders
-    // عرض جميع طلبات البقالة
     // =========================================================
     public function index(Request $request)
     {
@@ -47,7 +62,6 @@ class GroceryOrderController extends Controller
                 ])
                 ->latest();
 
-            // فلترة بحالة الطلب
             if ($request->filled('status')) {
                 $query->where('status', $request->status);
             }
@@ -55,9 +69,9 @@ class GroceryOrderController extends Controller
             $orders = $query->paginate(10);
 
             return response()->json([
-                'status'  => true,
-                'message' => 'تم جلب الطلبات بنجاح',
-                'data'    => OrderResource::collection($orders),
+                'status'     => true,
+                'message'    => 'تم جلب الطلبات بنجاح',
+                'data'       => OrderResource::collection($orders),
                 'pagination' => [
                     'current_page' => $orders->currentPage(),
                     'last_page'    => $orders->lastPage(),
@@ -135,14 +149,13 @@ class GroceryOrderController extends Controller
             $groceryStore = $this->getGroceryStore();
             if (!$groceryStore) return $this->forbiddenResponse('غير مصرح لك بإنشاء طلب');
 
-            // ── التحقق من المنتجات وحساب الأسعار ──
+            // ── التحقق من المنتجات ──
             $productIds = collect($request->items)->pluck('product_id');
             $products   = Product::whereIn('id', $productIds)
                 ->with('offers')
                 ->get()
                 ->keyBy('id');
 
-            // التحقق من توفر جميع المنتجات
             foreach ($request->items as $item) {
                 $product = $products->get($item['product_id']);
 
@@ -168,7 +181,7 @@ class GroceryOrderController extends Controller
                 }
             }
 
-            // ── جلب طريقة الدفع ──
+            // ── طريقة الدفع ──
             $paymentMethod = PaymentMethod::find($request->payment_method_id);
             $isDayn        = $paymentMethod->name === 'دين';
 
@@ -177,52 +190,50 @@ class GroceryOrderController extends Controller
             $orderItems  = [];
 
             foreach ($request->items as $item) {
-                $product   = $products->get($item['product_id']);
-                $unitPrice = $product->discounted_price;
-                $subtotal  = $item['quantity'] * $unitPrice;
+                $product      = $products->get($item['product_id']);
+                $unitPrice    = $product->discounted_price;
+                $subtotal     = $item['quantity'] * $unitPrice;
                 $totalAmount += $subtotal;
 
                 $orderItems[] = [
-                    'product_id'     => $product->id,
-                    'store_id'       => $product->store_id,
-                    'quantity'       => $item['quantity'],
-                    'price_at_time'  => $unitPrice,
-                    'subtotal'       => $subtotal,
+                    'product_id'    => $product->id,
+                    'store_id'      => $product->store_id,
+                    'quantity'      => $item['quantity'],
+                    'price_at_time' => $unitPrice,
+                    'subtotal'      => $subtotal,
                 ];
             }
 
-            // ── إنشاء الطلب داخل Transaction ──
+            // ── إنشاء الطلب ──
             $order = DB::transaction(function () use (
-                $request, $groceryStore, $paymentMethod, $isDayn,
+                $request, $groceryStore, $isDayn,
                 $totalAmount, $orderItems, $products
             ) {
                 // 1. إنشاء الطلب
                 $order = Order::create([
-                    'store_id'          => $groceryStore->id,
-                    'total_amount'      => $totalAmount,
-                    'delivery_fee'      => 0, // يُحسب لاحقاً
-                    'status'            => 'قيد_الانتظار',
-                    'payment_method_id' => $request->payment_method_id,
-                    'payment_status'    => 'بانتظار_الدفع',
-                    'approval_flow'     => $isDayn ? 'merchant' : 'support',
+                    'store_id'                 => $groceryStore->id,
+                    'total_amount'             => $totalAmount,
+                    'delivery_fee'             => 0,
+                    'status'                   => 'قيد_الانتظار',
+                    'payment_method_id'        => $request->payment_method_id,
+                    'payment_status'           => 'بانتظار_الدفع',
+                    'approval_flow'            => $isDayn ? 'merchant' : 'support',
                     'merchant_approval_status' => $isDayn ? 'بانتظار' : null,
-                    'customer_visible'  => !$isDayn, // مخفي حتى يوافق التاجر إن كان ديناً
-                    'delivery_address'  => $request->delivery_address,
-                    'notes'             => $request->notes,
+                    'customer_visible'         => !$isDayn,
+                    'delivery_address'         => $request->delivery_address,
+                    'notes'                    => $request->notes,
                 ]);
 
-                // 2. إنشاء تفاصيل الطلب وخصم المخزون
+                // 2. تفاصيل الطلب + خصم المخزون
                 foreach ($orderItems as $item) {
                     OrderDetail::create(array_merge(['order_id' => $order->id], $item));
-
-                    // خصم الكمية من مخزون المنتج
                     $products->get($item['product_id'])->deductStock($item['quantity']);
                 }
 
-                // 3. إنشاء سجلات الموافقة لكل تاجر (فقط إن كان الدفع ديناً)
+                // 3. سجلات الموافقة لكل تاجر (دين فقط)
                 if ($isDayn) {
-                    $merchantIds = collect($orderItems)->pluck('store_id')->unique();
-                    foreach ($merchantIds as $merchantStoreId) {
+                    $merchantStoreIds = collect($orderItems)->pluck('store_id')->unique();
+                    foreach ($merchantStoreIds as $merchantStoreId) {
                         OrderMerchantApproval::create([
                             'order_id'          => $order->id,
                             'merchant_store_id' => $merchantStoreId,
@@ -233,6 +244,39 @@ class GroceryOrderController extends Controller
 
                 return $order;
             });
+
+            // ── إشعارات بعد إنشاء الطلب ──
+            if ($isDayn) {
+                // إشعار لكل تاجر معني بالطلب
+                $merchantStoreIds = collect($orderItems)->pluck('store_id')->unique();
+
+                foreach ($merchantStoreIds as $merchantStoreId) {
+                    $merchantUser = User::whereHas('store',
+                        fn($q) => $q->where('id', $merchantStoreId)
+                    )->first();
+
+                    if (!$merchantUser) continue;
+
+                    // مبلغ هذا التاجر تحديداً
+                    $merchantTotal = collect($orderItems)
+                        ->where('store_id', $merchantStoreId)
+                        ->sum('subtotal');
+
+                    $this->sendNotification(
+                        $merchantUser->id,
+                        'طلب دين جديد يحتاج موافقتك 🔔',
+                        "لديك طلب رقم #{$order->id} من {$groceryStore->store_name} بمبلغ {$merchantTotal} ريال",
+                        [
+                            'type'     => 'dayn_order_pending',
+                            'order_id' => (string) $order->id,
+                            'amount'   => (string) $merchantTotal,
+                        ]
+                    );
+                }
+            } else {
+                // إشعار لفريق الدعم (الدفع عند الاستلام)
+                // يمكن إضافته لاحقاً عند بناء نظام الدعم
+            }
 
             // ── إعادة الطلب كاملاً ──
             $order->load([
@@ -256,7 +300,6 @@ class GroceryOrderController extends Controller
 
     // =========================================================
     // DELETE /api/auth/grocery/orders/{id}/cancel
-    // إلغاء الطلب (فقط إن كان قيد الانتظار)
     // =========================================================
     public function cancel($id)
     {
@@ -277,7 +320,8 @@ class GroceryOrderController extends Controller
             DB::transaction(function () use ($order) {
                 // إعادة المخزون
                 foreach ($order->orderDetails as $detail) {
-                    $detail->product->increment('quantity',
+                    $detail->product->increment(
+                        'quantity',
                         $detail->quantity * $detail->product->pieces_per_unit
                     );
                 }

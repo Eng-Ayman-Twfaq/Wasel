@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MerchantOrderApprovalRequest;
+use App\Models\Invoice;
+use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderMerchantApproval;
+use App\Models\Transaction;
+use App\Models\User;
 use App\Http\Resources\OrderResource;
 use App\Traits\PasswordVerification;
 use Illuminate\Http\Request;
@@ -18,26 +22,29 @@ class MerchantOrderController extends Controller
     use PasswordVerification;
 
     // ─────────────────────────────────────────
+    // Helper — إرسال إشعار داخلي
+    // ─────────────────────────────────────────
+    private function sendNotification(int $userId, string $title, string $body, array $data = []): void
+    {
+        Notification::create([
+            'user_id' => $userId,
+            'title'   => $title,
+            'body'    => $body,
+            'data'    => $data,
+            'is_read' => false,
+        ]);
+    }
+
+    // ─────────────────────────────────────────
     // Helper — التحقق أن المستخدم تاجر نشط
     // ─────────────────────────────────────────
     private function getMerchantStore()
     {
         $user = Auth::user();
-         if (!$user) {
-        throw new \Exception('المستخدم غير مسجل الدخول', 401);
-    }
-    
-    if (!$user->store) {
-        throw new \Exception('ليس لديك متجر مسجل', 403);
-    }
-    
-    if (!$user->store->isMerchant()) {
-        throw new \Exception('المتجر ليس من نوع تاجر', 403);
-    }
-    
-    if (!$user->store->isActive()) {
-        throw new \Exception('المتجر غير نشط. يرجى التواصل مع الدعم', 403);
-    }
+        if (!$user) throw new \Exception('المستخدم غير مسجل الدخول', 401);
+        if (!$user->store) throw new \Exception('ليس لديك متجر مسجل', 403);
+        if (!$user->store->isMerchant()) throw new \Exception('المتجر ليس من نوع تاجر', 403);
+        if (!$user->store->isActive()) throw new \Exception('المتجر غير نشط. يرجى التواصل مع الدعم', 403);
         return $user->store;
     }
 
@@ -60,40 +67,26 @@ class MerchantOrderController extends Controller
     public function stats()
     {
         try {
-            $store = $this->getMerchantStore();
-            if (!$store) return $this->forbiddenResponse('غير مصرح لك');
-
-            // جميع طلبات هذا التاجر بغض النظر عن approval_flow
-            $base = fn() => Order::whereHas('orderDetails',
-                fn($q) => $q->where('store_id', $store->id)
-            );
-
-            // إحصائيات طلبات الدين (تحتاج موافقة التاجر)
+            $store    = $this->getMerchantStore();
+            $base     = fn() => Order::whereHas('orderDetails', fn($q) => $q->where('store_id', $store->id));
             $daynBase = fn() => $base()->where('approval_flow', 'merchant');
 
             $approvalCount = fn($status) => $daynBase()->whereHas('merchantApprovals',
                 fn($q) => $q->where('merchant_store_id', $store->id)->where('status', $status)
             )->count();
 
-            $pending  = $approvalCount('بانتظار');
-            $approved = $approvalCount('موافق');
-            $rejected = $approvalCount('مرفوض');
-
             return response()->json([
                 'status' => true,
                 'data'   => [
-                    // ── إجمالي حسب حالة الطلب ──
-                    'waiting'    => $base()->where('status', 'قيد_الانتظار')->count(),
-                    'processing' => $base()->where('status', 'قيد_المعالجة')->count(),
-                    'completed'  => $base()->where('status', 'مكتمل')->count(),
-                    'rejected'   => $base()->where('status', 'مرفوض')->count(),
-                    'cancelled'  => $base()->where('status', 'ملغي')->count(),
-                    'total'      => $base()->count(),
-
-                    // ── طلبات الدين التي تحتاج موافقة التاجر ──
-                    'dayn_pending'  => $pending,
-                    'dayn_approved' => $approved,
-                    'dayn_rejected' => $rejected,
+                    'waiting'       => $base()->where('status', 'قيد_الانتظار')->count(),
+                    'processing'    => $base()->where('status', 'قيد_المعالجة')->count(),
+                    'completed'     => $base()->where('status', 'مكتمل')->count(),
+                    'rejected'      => $base()->where('status', 'مرفوض')->count(),
+                    'cancelled'     => $base()->where('status', 'ملغي')->count(),
+                    'total'         => $base()->count(),
+                    'dayn_pending'  => $approvalCount('بانتظار'),
+                    'dayn_approved' => $approvalCount('موافق'),
+                    'dayn_rejected' => $approvalCount('مرفوض'),
                 ],
             ]);
         } catch (Exception $e) {
@@ -108,7 +101,6 @@ class MerchantOrderController extends Controller
     {
         try {
             $store = $this->getMerchantStore();
-            if (!$store) return $this->forbiddenResponse('غير مصرح لك بعرض الطلبات');
 
             $query = Order::whereHas('orderDetails', fn($q) => $q->where('store_id', $store->id))
                 ->with([
@@ -119,31 +111,31 @@ class MerchantOrderController extends Controller
                     'merchantApprovals' => fn($q) => $q->where('merchant_store_id', $store->id),
                 ])
                 ->latest();
-            
-            // ✅ فلترة حسب حالة الطلب
+
             if ($request->filled('status')) {
                 $query->where('status', $request->status);
             }
 
             $orders = $query->paginate(10);
-// ✅ التحقق من وجود طلبات
-        if ($orders->isEmpty()) {
+
+            if ($orders->isEmpty()) {
+                return response()->json([
+                    'status'     => false,
+                    'message'    => 'لا يوجد طلبات حالياً',
+                    'data'       => [],
+                    'pagination' => [
+                        'current_page' => $orders->currentPage(),
+                        'last_page'    => $orders->lastPage(),
+                        'per_page'     => $orders->perPage(),
+                        'total'        => $orders->total(),
+                    ],
+                ]);
+            }
+
             return response()->json([
-                'status'  => false,
-                'message' => 'لايوجد طلبات حاليا',
-                'data'    => [],
-                'pagination' => [
-                    'current_page' => $orders->currentPage(),
-                    'last_page'    => $orders->lastPage(),
-                    'per_page'     => $orders->perPage(),
-                    'total'        => $orders->total(),
-                ],
-            ]);
-        }
-            return response()->json([
-                'status'  => true,
-                'message' => 'تم جلب الطلبات بنجاح',
-                'data'    => OrderResource::collection($orders),
+                'status'     => true,
+                'message'    => 'تم جلب الطلبات بنجاح',
+                'data'       => OrderResource::collection($orders),
                 'pagination' => [
                     'current_page' => $orders->currentPage(),
                     'last_page'    => $orders->lastPage(),
@@ -163,7 +155,6 @@ class MerchantOrderController extends Controller
     {
         try {
             $store = $this->getMerchantStore();
-            if (!$store) return $this->forbiddenResponse('غير مصرح لك');
 
             $order = Order::whereHas('orderDetails', fn($q) => $q->where('store_id', $store->id))
                 ->with([
@@ -188,31 +179,27 @@ class MerchantOrderController extends Controller
 
     // =========================================================
     // POST /api/auth/merchant/orders/{id}/approve
-    // ✅ تتطلب كلمة المرور
     // =========================================================
     public function approve(MerchantOrderApprovalRequest $request, $id)
     {
         try {
             $store = $this->getMerchantStore();
-            if (!$store) return $this->forbiddenResponse('غير مصرح لك');
 
-            // ✅ التحقق من كلمة المرور عبر الـ Trait
             $check = $this->verifyPassword($request->password);
             if ($check !== true) return $check;
 
             $order = $this->getMerchantOrder($id, $store->id);
             if (!$order) return $this->notFoundResponse('الطلب غير موجود');
 
-            // ✅ التحقق أن الطلب يسمح بموافقة التاجر (دفع دين فقط)
             if ($order->approval_flow !== 'merchant') {
                 return response()->json([
                     'status'  => false,
-                    'message' => 'هذا الطلب لا يتطلب موافقة التاجر، يتم معالجته عبر فريق الدعم',
+                    'message' => 'هذا الطلب لا يتطلب موافقة التاجر',
                 ], 422);
             }
 
             $approval = $this->getMerchantApproval($order->id, $store->id);
-            if (!$approval) return $this->notFoundResponse('لا يوجد سجل موافقة مرتبط بهذا الطلب');
+            if (!$approval) return $this->notFoundResponse('لا يوجد سجل موافقة لهذا الطلب');
 
             if (!$approval->isPending()) {
                 return response()->json([
@@ -222,7 +209,8 @@ class MerchantOrderController extends Controller
             }
 
             DB::transaction(function () use ($order, $approval, $store) {
-                // تحديث موافقة هذا التاجر
+
+                // ── 1. تحديث موافقة هذا التاجر ──
                 $approval->update([
                     'status'      => 'موافق',
                     'approved_by' => Auth::id(),
@@ -235,16 +223,106 @@ class MerchantOrderController extends Controller
                     'merchant_approved_at'     => now(),
                 ]);
 
-                // هل جميع التجار وافقوا؟
+                // ── 2. مبلغ هذا التاجر تحديداً ──
+                $merchantTotal = $order->orderDetails()
+                    ->where('store_id', $store->id)
+                    ->sum('subtotal');
+
+                // ── 3. فاتورة merchant لهذا التاجر ──
+                $merchantInvoice = Invoice::create([
+                    'order_id'          => $order->id,
+                    'store_id'          => $store->id,
+                    'customer_store_id' => $order->store_id,
+                    'invoice_type'      => 'merchant',
+                    'total_amount'      => $merchantTotal,
+                    'invoice_status'    => 'مرسلة',
+                    'sent_at'           => now(),
+                ]);
+
+                // ── 4. معاملة مالية لهذا التاجر مرتبطة بفاتورته ──
+                Transaction::create([
+                    'invoice_id'       => $merchantInvoice->id,
+                    'amount'           => $merchantTotal,
+                    'payment_method_id'=> $order->payment_method_id,
+                    'transaction_date' => now(),
+                    'reference'        => 'ORD-' . $order->id . '-STORE-' . $store->id,
+                    'status'           => 'قيد_الانتظار', // تصبح ناجحة عند موافقة الكل
+                ]);
+
+                // ── 5. إشعار للبقالة: تاجر وافق ──
+                $groceryUser = User::whereHas('store', fn($q) => $q->where('id', $order->store_id))->first();
+
+                if ($groceryUser) {
+                    $this->sendNotification(
+                        $groceryUser->id,
+                        'تاجر وافق على طلبك ✅',
+                        "وافق {$store->store_name} على طلبك رقم #{$order->id}",
+                        ['type' => 'merchant_approved', 'order_id' => (string) $order->id]
+                    );
+                }
+
+                // ── 6. هل جميع التجار وافقوا؟ ──
                 $allApproved = OrderMerchantApproval::where('order_id', $order->id)
                     ->where('status', '!=', 'موافق')
                     ->doesntExist();
 
                 if ($allApproved) {
+
+                    // 6a. تحديث حالة الطلب + حالة الدفع → مدفوع
                     $order->update([
                         'status'           => 'قيد_المعالجة',
+                        'payment_status'   => 'مدفوع',
                         'customer_visible' => true,
                     ]);
+
+                    // 6b. تحديث جميع المعاملات المالية لهذا الطلب → ناجحة
+                    Transaction::whereHas('invoice',
+                        fn($q) => $q->where('order_id', $order->id)
+                    )->update(['status' => 'ناجحة']);
+
+                    // 6c. تحديث جميع الفواتير merchant → مدفوعة
+                    Invoice::where('order_id', $order->id)
+                        ->where('invoice_type', 'merchant')
+                        ->update(['invoice_status' => 'مدفوعة']);
+
+                    // 6d. فاتورة master = مجموع كل فواتير merchant
+                    $masterTotal = Invoice::where('order_id', $order->id)
+                        ->where('invoice_type', 'merchant')
+                        ->sum('total_amount');
+
+                    $masterInvoice = Invoice::create([
+                        'order_id'          => $order->id,
+                        'store_id'          => $order->store_id,
+                        'customer_store_id' => $order->store_id,
+                        'invoice_type'      => 'master',
+                        'total_amount'      => $masterTotal,
+                        'invoice_status'    => 'مدفوعة',
+                        'sent_at'           => now(),
+                    ]);
+
+                    // 6e. معاملة مالية للفاتورة master
+                    Transaction::create([
+                        'invoice_id'        => $masterInvoice->id,
+                        'amount'            => $masterTotal,
+                        'payment_method_id' => $order->payment_method_id,
+                        'transaction_date'  => now(),
+                        'reference'         => 'ORD-' . $order->id . '-MASTER',
+                        'status'            => 'ناجحة',
+                    ]);
+
+                    // 6f. إشعار للبقالة: الطلب كاملاً معتمد
+                    if ($groceryUser) {
+                        $this->sendNotification(
+                            $groceryUser->id,
+                            'طلبك معتمد بالكامل 🎉',
+                            "تمت موافقة جميع التجار على طلبك رقم #{$order->id} بإجمالي {$masterTotal} ريال",
+                            [
+                                'type'     => 'order_fully_approved',
+                                'order_id' => (string) $order->id,
+                                'total'    => (string) $masterTotal,
+                            ]
+                        );
+                    }
                 }
             });
 
@@ -259,31 +337,27 @@ class MerchantOrderController extends Controller
 
     // =========================================================
     // POST /api/auth/merchant/orders/{id}/reject
-    // ✅ تتطلب كلمة المرور
     // =========================================================
     public function reject(MerchantOrderApprovalRequest $request, $id)
     {
         try {
             $store = $this->getMerchantStore();
-            if (!$store) return $this->forbiddenResponse('غير مصرح لك');
 
-            // ✅ التحقق من كلمة المرور عبر الـ Trait
             $check = $this->verifyPassword($request->password);
             if ($check !== true) return $check;
 
             $order = $this->getMerchantOrder($id, $store->id);
             if (!$order) return $this->notFoundResponse('الطلب غير موجود');
 
-            // ✅ التحقق أن الطلب يسمح بموافقة التاجر (دفع دين فقط)
             if ($order->approval_flow !== 'merchant') {
                 return response()->json([
                     'status'  => false,
-                    'message' => 'هذا الطلب لا يتطلب موافقة التاجر، يتم معالجته عبر فريق الدعم',
+                    'message' => 'هذا الطلب لا يتطلب موافقة التاجر',
                 ], 422);
             }
 
             $approval = $this->getMerchantApproval($order->id, $store->id);
-            if (!$approval) return $this->notFoundResponse('لا يوجد سجل موافقة مرتبط بهذا الطلب');
+            if (!$approval) return $this->notFoundResponse('لا يوجد سجل موافقة لهذا الطلب');
 
             if (!$approval->isPending()) {
                 return response()->json([
@@ -292,19 +366,38 @@ class MerchantOrderController extends Controller
                 ], 422);
             }
 
-            DB::transaction(function () use ($order, $approval) {
+            DB::transaction(function () use ($order, $approval, $store) {
+
+                // ── 1. تحديث الرفض ──
                 $approval->update([
                     'status'      => 'مرفوض',
                     'approved_by' => Auth::id(),
                     'approved_at' => now(),
                 ]);
 
-                // رفض الطلب كاملاً فور رفض أي تاجر
                 $order->update([
                     'merchant_approval_status' => 'مرفوض',
                     'status'                   => 'مرفوض',
+                    'payment_status'           => 'فشل_الدفع',
                     'customer_visible'         => false,
                 ]);
+
+                // ── 2. إلغاء أي معاملات مالية أُنشئت مسبقاً لهذا الطلب ──
+                Transaction::whereHas('invoice',
+                    fn($q) => $q->where('order_id', $order->id)
+                )->update(['status' => 'فشلت']);
+
+                // ── 3. إشعار للبقالة ──
+                $groceryUser = User::whereHas('store', fn($q) => $q->where('id', $order->store_id))->first();
+
+                if ($groceryUser) {
+                    $this->sendNotification(
+                        $groceryUser->id,
+                        'تم رفض طلبك ❌',
+                        "رفض {$store->store_name} طلبك رقم #{$order->id}",
+                        ['type' => 'order_rejected', 'order_id' => (string) $order->id]
+                    );
+                }
             });
 
             return response()->json([
