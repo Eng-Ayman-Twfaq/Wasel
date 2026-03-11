@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Store;
 use App\Http\Resources\MarketplaceProductResource;
+use App\Http\Resources\ProductResource;
 use App\Http\Resources\TraderResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -42,7 +43,7 @@ class MarketplaceController extends Controller
             })
             ->paginate(20);
 
-        return MarketplaceProductResource::collection($products);
+        return ProductResource::collection($products);
     }
 
     // منتجات التجار القريبين
@@ -69,7 +70,7 @@ class MarketplaceController extends Controller
             ->whereIn('store_id', $stores)
             ->paginate(20);
 
-        return MarketplaceProductResource::collection($products);
+        return ProductResource::collection($products);
     }
 
     // عرض جميع التجار
@@ -106,4 +107,11 @@ class MarketplaceController extends Controller
 
         return TraderResource::collection($traders);
     }
+
+    public function productDetail(int $id) {
+      $grocery  = $this->ensureGrocery();
+      $product  = Product::with('store')->findOrFail($id);
+    //   return response()->json(['data' => new MarketplaceProductResource($product)]);
+    return response()->json(['data' => new ProductResource($product)]);
+  }
 }

@@ -13,6 +13,7 @@ class MarketplaceProductResource extends JsonResource
             'name' => $this->name,
             'description' => $this->description,
             'price' => (float) $this->discounted_price,
+            'quantity' => $this->quantity,
             'original_price' => (float) $this->price,
             'unit_type' => $this->unit_type,
             'min_order_quantity' => $this->min_order_quantity,

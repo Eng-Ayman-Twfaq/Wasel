@@ -115,11 +115,17 @@ Route::prefix('auth')->group(function () {
         Route::post('orders',                [GroceryOrderController::class, 'store']);
         Route::post('orders/{id}/cancel',    [GroceryOrderController::class, 'cancel']);
 
-    });
-    Route::middleware('auth:sanctum')->prefix('market')->group(function () {
+        // الرئيسية للعملاء
     Route::get('/products', [MarketplaceController::class, 'products']);
     Route::get('/products/nearby', [MarketplaceController::class, 'nearbyProducts']);
     Route::get('/traders', [MarketplaceController::class, 'traders']);
     Route::get('/traders/nearby', [MarketplaceController::class, 'nearbyTraders']);
-});
+    Route::get('marketplace/products/{id}', [MarketplaceController::class, 'productDetail']);
+
+    });
+
+    // Route::middleware('auth:sanctum')->prefix('market')->group(function () {
+    
+    // });
+
 });
