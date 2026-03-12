@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Auth\DeviceController;
 use App\Http\Controllers\Api\Auth\RegistrationController;
 use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\GroceryOrderController;
 use App\Http\Controllers\Api\InvoiceController;
@@ -121,6 +122,19 @@ Route::prefix('auth')->group(function () {
     Route::get('/traders', [MarketplaceController::class, 'traders']);
     Route::get('/traders/nearby', [MarketplaceController::class, 'nearbyTraders']);
     Route::get('marketplace/products/{id}', [MarketplaceController::class, 'productDetail']);
+
+
+    // السلة للتسوق
+  
+    Route::get    ('/cart',         [CartController::class, 'index']);   // عرض السلة
+    Route::post   ('/cart',         [CartController::class, 'store']);   // إضافة منتج
+    Route::patch  ('/cart/{id}',    [CartController::class, 'update']);  // تعديل كمية
+    Route::delete ('/cart/{id}',    [CartController::class, 'destroy']); // حذف عنصر
+    Route::delete ('/cart',         [CartController::class, 'clear']);   // تفريغ السلة
+    Route::get    ('/cart/count',   [CartController::class, 'count']);   // عدد العناصر
+   
+
+
 
     });
 
