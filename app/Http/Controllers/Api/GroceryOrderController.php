@@ -12,6 +12,7 @@ use App\Models\OrderMerchantApproval;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\User;
+use App\Traits\PasswordVerification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,9 @@ use Exception;
 
 class GroceryOrderController extends Controller
 {
+    // ✅ Trait التحقق من كلمة المرور
+    use PasswordVerification;
+
     // ─────────────────────────────────────────
     // Helper — إرسال إشعار داخلي
     // ─────────────────────────────────────────
@@ -43,6 +47,29 @@ class GroceryOrderController extends Controller
             return null;
         }
         return $user->store;
+    }
+
+    // =========================================================
+    // GET /api/auth/grocery/payment-methods
+    // جلب طرق الدفع النشطة
+    // =========================================================
+    public function paymentMethods()
+    {
+        try {
+            $methods = PaymentMethod::where('is_active', true)
+                ->orderBy('id')
+                ->get(['id', 'name']);
+
+            return response()->json([
+                'status' => true,
+                'data'   => $methods->map(fn($m) => [
+                    'id'   => (int) $m->id,
+                    'name' => $m->name,
+                ]),
+            ]);
+        } catch (Exception $e) {
+            return $this->serverError();
+        }
     }
 
     // =========================================================
@@ -141,13 +168,17 @@ class GroceryOrderController extends Controller
 
     // =========================================================
     // POST /api/auth/grocery/orders
-    // إنشاء طلب جديد
+    // إنشاء طلب جديد — يتضمن كلمة المرور للتحقق
     // =========================================================
     public function store(StoreOrderRequest $request)
     {
         try {
             $groceryStore = $this->getGroceryStore();
             if (!$groceryStore) return $this->forbiddenResponse('غير مصرح لك بإنشاء طلب');
+
+            // ✅ التحقق من كلمة المرور أولاً — نفس أسلوب ProductController
+            $check = $this->verifyPassword($request->password);
+            if ($check !== true) return $check; // يُرجع 403 تلقائياً إذا خاطئة
 
             // ── التحقق من المنتجات ──
             $productIds = collect($request->items)->pluck('product_id');
@@ -209,7 +240,6 @@ class GroceryOrderController extends Controller
                 $request, $groceryStore, $isDayn,
                 $totalAmount, $orderItems, $products
             ) {
-                // 1. إنشاء الطلب
                 $order = Order::create([
                     'store_id'                 => $groceryStore->id,
                     'total_amount'             => $totalAmount,
@@ -224,13 +254,11 @@ class GroceryOrderController extends Controller
                     'notes'                    => $request->notes,
                 ]);
 
-                // 2. تفاصيل الطلب + خصم المخزون
                 foreach ($orderItems as $item) {
                     OrderDetail::create(array_merge(['order_id' => $order->id], $item));
                     $products->get($item['product_id'])->deductStock($item['quantity']);
                 }
 
-                // 3. سجلات الموافقة لكل تاجر (دين فقط)
                 if ($isDayn) {
                     $merchantStoreIds = collect($orderItems)->pluck('store_id')->unique();
                     foreach ($merchantStoreIds as $merchantStoreId) {
@@ -245,9 +273,8 @@ class GroceryOrderController extends Controller
                 return $order;
             });
 
-            // ── إشعارات بعد إنشاء الطلب ──
+            // ── إشعارات ──
             if ($isDayn) {
-                // إشعار لكل تاجر معني بالطلب
                 $merchantStoreIds = collect($orderItems)->pluck('store_id')->unique();
 
                 foreach ($merchantStoreIds as $merchantStoreId) {
@@ -257,7 +284,6 @@ class GroceryOrderController extends Controller
 
                     if (!$merchantUser) continue;
 
-                    // مبلغ هذا التاجر تحديداً
                     $merchantTotal = collect($orderItems)
                         ->where('store_id', $merchantStoreId)
                         ->sum('subtotal');
@@ -273,12 +299,8 @@ class GroceryOrderController extends Controller
                         ]
                     );
                 }
-            } else {
-                // إشعار لفريق الدعم (الدفع عند الاستلام)
-                // يمكن إضافته لاحقاً عند بناء نظام الدعم
             }
 
-            // ── إعادة الطلب كاملاً ──
             $order->load([
                 'paymentMethod:id,name',
                 'orderDetails.product:id,name,unit_type',
@@ -318,14 +340,12 @@ class GroceryOrderController extends Controller
             }
 
             DB::transaction(function () use ($order) {
-                // إعادة المخزون
                 foreach ($order->orderDetails as $detail) {
                     $detail->product->increment(
                         'quantity',
                         $detail->quantity * $detail->product->pieces_per_unit
                     );
                 }
-
                 $order->update(['status' => 'ملغي']);
             });
 

@@ -16,6 +16,9 @@ class StoreOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // ✅ كلمة المرور مطلوبة للتحقق من الهوية
+            'password'              => ['required', 'string'],
+
             'payment_method_id'     => ['required', 'integer', 'exists:payment_methods,id'],
             'delivery_address'      => ['required', 'string', 'max:500'],
             'notes'                 => ['nullable', 'string', 'max:1000'],
@@ -29,6 +32,8 @@ class StoreOrderRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'password.required'           => 'كلمة المرور مطلوبة للتأكيد',
+
             'payment_method_id.required'  => 'طريقة الدفع مطلوبة',
             'payment_method_id.exists'    => 'طريقة الدفع المحددة غير موجودة',
             'delivery_address.required'   => 'عنوان التوصيل مطلوب',

@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\MerchantOrderController;
 use App\Http\Controllers\Api\MerchantProfileController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProductController;
+use App\Traits\PasswordVerification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -57,8 +58,10 @@ Route::prefix('auth')->group(function () {
     // المسارات المحمية
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
+      
     });
-
+ 
+      
 
    
 // تحكم التاجر
@@ -110,12 +113,21 @@ Route::prefix('auth')->group(function () {
 
     Route::middleware('auth:sanctum')->prefix('grocery')->group(function () {
 
-        Route::get('orders/stats',           [GroceryOrderController::class, 'stats']);
-        Route::get('orders',                 [GroceryOrderController::class, 'index']);
-        Route::get('orders/{id}',            [GroceryOrderController::class, 'show']);
-        Route::post('orders',                [GroceryOrderController::class, 'store']);
-        Route::post('orders/{id}/cancel',    [GroceryOrderController::class, 'cancel']);
-
+        // Route::get('orders/stats',           [GroceryOrderController::class, 'stats']);
+        // Route::get('orders',                 [GroceryOrderController::class, 'index']);
+        // Route::get('orders/{id}',            [GroceryOrderController::class, 'show']);
+        // Route::post('orders',                [GroceryOrderController::class, 'store']);
+        // Route::post('orders/{id}/cancel',    [GroceryOrderController::class, 'cancel']);
+// طرق الدفع
+    Route::get('payment-methods', [GroceryOrderController::class, 'paymentMethods']);
+ 
+    // الطلبات
+    Route::get('orders',              [GroceryOrderController::class, 'index']);
+    Route::get('orders/stats',        [GroceryOrderController::class, 'stats']);
+    Route::get('orders/{id}',         [GroceryOrderController::class, 'show']);
+    Route::post('orders',             [GroceryOrderController::class, 'store']);
+    Route::delete('orders/{id}/cancel', [GroceryOrderController::class, 'cancel']);
+    
         // الرئيسية للعملاء
     Route::get('/products', [MarketplaceController::class, 'products']);
     Route::get('/products/nearby', [MarketplaceController::class, 'nearbyProducts']);

@@ -19,7 +19,7 @@ class InvoiceController extends Controller
     private function getMerchantStore()
     {
         $user = Auth::user();
-        if (!$user || !$user->store || !$user->store->isMerchant() || !$user->store->isActive()) {
+        if (!$user || !$user->store || !$user->store->isActive()) {
             return null;
         }
         return $user->store;
