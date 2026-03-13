@@ -129,12 +129,33 @@ Route::prefix('auth')->group(function () {
     Route::delete('orders/{id}/cancel', [GroceryOrderController::class, 'cancel']);
     
         // الرئيسية للعملاء
-    Route::get('/products', [MarketplaceController::class, 'products']);
-    Route::get('/products/nearby', [MarketplaceController::class, 'nearbyProducts']);
-    Route::get('/traders', [MarketplaceController::class, 'traders']);
-    Route::get('/traders/nearby', [MarketplaceController::class, 'nearbyTraders']);
-    Route::get('marketplace/products/{id}', [MarketplaceController::class, 'productDetail']);
+    // Route::get('/products', [MarketplaceController::class, 'products']);
+    // Route::get('/products/nearby', [MarketplaceController::class, 'nearbyProducts']);
+    // Route::get('/traders', [MarketplaceController::class, 'traders']);
+    // Route::get('/traders/nearby', [MarketplaceController::class, 'nearbyTraders']);
+    // Route::get('marketplace/products/{id}', [MarketplaceController::class, 'productDetail']);
 
+    // // قائمة منتجات تاجر معين
+    // Route::prefix('merchant')->group(function () {
+
+    //     Route::get('traders/{id}/products', [MarketplaceController::class, 'traderProducts']);
+
+    // });
+Route::prefix('/marketplace')->group(function () {
+ 
+    // ── المنتجات ──
+    Route::get('products',         [MarketplaceController::class, 'products']);
+    Route::get('products/nearby',  [MarketplaceController::class, 'nearbyProducts']);
+    // ⚠️ products/{id} يجب أن يكون بعد products/nearby حتى لا يتعارضا
+    Route::get('products/{id}',    [MarketplaceController::class, 'productDetail']);
+ 
+    // ── التجار ──
+    Route::get('traders',                   [MarketplaceController::class, 'traders']);
+    Route::get('traders/nearby',            [MarketplaceController::class, 'nearbyTraders']);
+    // ⚠️ traders/{id}/products يجب أن يكون بعد traders/nearby
+    Route::get('traders/{id}/products',     [MarketplaceController::class, 'traderProducts']);
+ 
+});
 
     // السلة للتسوق
   
