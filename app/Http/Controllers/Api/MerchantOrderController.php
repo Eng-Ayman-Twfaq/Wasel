@@ -161,7 +161,7 @@ class MerchantOrderController extends Controller
                     'grocery:id,store_name,address',
                     'paymentMethod:id,name',
                     'orderDetails' => fn($q) => $q->where('store_id', $store->id)
-                        ->with('product:id,name,price,unit_type,image_url'),
+                        ->with('product:id,name,price,unit_type'),
                     'merchantApprovals' => fn($q) => $q->where('merchant_store_id', $store->id),
                 ])
                 ->find($id);
