@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\MerchantOrderController;
 use App\Http\Controllers\Api\MerchantProfileController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\PromotionController;
+use App\Http\Controllers\Api\SearchController;
 use App\Traits\PasswordVerification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -126,6 +128,7 @@ Route::prefix('auth')->group(function () {
     Route::get('orders/stats',        [GroceryOrderController::class, 'stats']);
     Route::get('orders/{id}',         [GroceryOrderController::class, 'show']);
     Route::post('orders',             [GroceryOrderController::class, 'store']);
+    // Route::delete('orders/{id}/cancel', [GroceryOrderController::class, 'cancel']);
     Route::delete('orders/{id}/cancel', [GroceryOrderController::class, 'cancel']);
     
         // الرئيسية للعملاء
@@ -141,21 +144,26 @@ Route::prefix('auth')->group(function () {
     //     Route::get('traders/{id}/products', [MarketplaceController::class, 'traderProducts']);
 
     // });
-Route::prefix('/marketplace')->group(function () {
+    Route::prefix('/marketplace')->group(function () {
  
-    // ── المنتجات ──
-    Route::get('products',         [MarketplaceController::class, 'products']);
-    Route::get('products/nearby',  [MarketplaceController::class, 'nearbyProducts']);
-    // ⚠️ products/{id} يجب أن يكون بعد products/nearby حتى لا يتعارضا
-    Route::get('products/{id}',    [MarketplaceController::class, 'productDetail']);
+        // ── المنتجات ──
+        Route::get('products',         [MarketplaceController::class, 'products']);
+        Route::get('products/nearby',  [MarketplaceController::class, 'nearbyProducts']);
+        // ⚠️ products/{id} يجب أن يكون بعد products/nearby حتى لا يتعارضا
+        Route::get('products/{id}',    [MarketplaceController::class, 'productDetail']);
+    
+        // ── التجار ──
+        Route::get('traders',                   [MarketplaceController::class, 'traders']);
+        Route::get('traders/nearby',            [MarketplaceController::class, 'nearbyTraders']);
+        // ⚠️ traders/{id}/products يجب أن يكون بعد traders/nearby
+        Route::get('traders/{id}/products',     [MarketplaceController::class, 'traderProducts']);
+
+
+        // البحث
+    Route::get('search',             [SearchController::class, 'search']);
+    Route::get('search/suggestions', [SearchController::class, 'suggestions']);
  
-    // ── التجار ──
-    Route::get('traders',                   [MarketplaceController::class, 'traders']);
-    Route::get('traders/nearby',            [MarketplaceController::class, 'nearbyTraders']);
-    // ⚠️ traders/{id}/products يجب أن يكون بعد traders/nearby
-    Route::get('traders/{id}/products',     [MarketplaceController::class, 'traderProducts']);
- 
-});
+    });
 
     // السلة للتسوق
   
@@ -166,7 +174,9 @@ Route::prefix('/marketplace')->group(function () {
     Route::delete ('/cart',         [CartController::class, 'clear']);   // تفريغ السلة
     Route::get    ('/cart/count',   [CartController::class, 'count']);   // عدد العناصر
    
-
+    
+    // العروض
+    Route::get('/promotions', [PromotionController::class, 'index']);
 
 
     });

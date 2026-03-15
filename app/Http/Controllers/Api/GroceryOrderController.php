@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
+use App\Http\Requests\CancelOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Notification;
 use App\Models\Order;
@@ -20,12 +21,8 @@ use Exception;
 
 class GroceryOrderController extends Controller
 {
-    // ✅ Trait التحقق من كلمة المرور
     use PasswordVerification;
 
-    // ─────────────────────────────────────────
-    // Helper — إرسال إشعار داخلي
-    // ─────────────────────────────────────────
     private function sendNotification(int $userId, string $title, string $body, array $data = []): void
     {
         Notification::create([
@@ -37,9 +34,6 @@ class GroceryOrderController extends Controller
         ]);
     }
 
-    // ─────────────────────────────────────────
-    // Helper — التحقق أن المستخدم بقالة نشطة
-    // ─────────────────────────────────────────
     private function getGroceryStore()
     {
         $user = Auth::user();
@@ -49,10 +43,9 @@ class GroceryOrderController extends Controller
         return $user->store;
     }
 
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     // GET /api/auth/grocery/payment-methods
-    // جلب طرق الدفع النشطة
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     public function paymentMethods()
     {
         try {
@@ -72,9 +65,10 @@ class GroceryOrderController extends Controller
         }
     }
 
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     // GET /api/auth/grocery/orders
-    // =========================================================
+    // البحث + الفلترة + pagination
+    // ═══════════════════════════════════════════════════════════
     public function index(Request $request)
     {
         try {
@@ -89,8 +83,24 @@ class GroceryOrderController extends Controller
                 ])
                 ->latest();
 
+            // ── فلترة بالحالة ──
             if ($request->filled('status')) {
                 $query->where('status', $request->status);
+            }
+
+            // ── بحث بـ id ──
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('id', $search)
+                      ->orWhere('delivery_address', 'like', "%$search%")
+                      ->orWhere('notes', 'like', "%$search%");
+                });
+            }
+
+            // ── فلترة بطريقة الدفع ──
+            if ($request->filled('payment_method_id')) {
+                $query->where('payment_method_id', $request->payment_method_id);
             }
 
             $orders = $query->paginate(10);
@@ -111,9 +121,9 @@ class GroceryOrderController extends Controller
         }
     }
 
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     // GET /api/auth/grocery/orders/stats
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     public function stats()
     {
         try {
@@ -138,9 +148,9 @@ class GroceryOrderController extends Controller
         }
     }
 
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     // GET /api/auth/grocery/orders/{id}
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     public function show($id)
     {
         try {
@@ -166,66 +176,45 @@ class GroceryOrderController extends Controller
         }
     }
 
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     // POST /api/auth/grocery/orders
-    // إنشاء طلب جديد — يتضمن كلمة المرور للتحقق
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     public function store(StoreOrderRequest $request)
     {
         try {
             $groceryStore = $this->getGroceryStore();
             if (!$groceryStore) return $this->forbiddenResponse('غير مصرح لك بإنشاء طلب');
 
-            // ✅ التحقق من كلمة المرور أولاً — نفس أسلوب ProductController
+            // ── كلمة المرور (PasswordVerification Trait) ──
             $check = $this->verifyPassword($request->password);
-            if ($check !== true) return $check; // يُرجع 403 تلقائياً إذا خاطئة
+            if ($check !== true) return $check;
 
-            // ── التحقق من المنتجات ──
             $productIds = collect($request->items)->pluck('product_id');
-            $products   = Product::whereIn('id', $productIds)
-                ->with('offers')
-                ->get()
-                ->keyBy('id');
+            $products   = Product::whereIn('id', $productIds)->with('offers')->get()->keyBy('id');
 
             foreach ($request->items as $item) {
                 $product = $products->get($item['product_id']);
-
                 if (!$product) {
-                    return response()->json([
-                        'status'  => false,
-                        'message' => "المنتج رقم {$item['product_id']} غير موجود",
-                    ], 422);
+                    return response()->json(['status' => false, 'message' => "المنتج رقم {$item['product_id']} غير موجود"], 422);
                 }
-
                 if (!$product->is_available || $product->quantity <= 0) {
-                    return response()->json([
-                        'status'  => false,
-                        'message' => "المنتج «{$product->name}» غير متوفر حالياً",
-                    ], 422);
+                    return response()->json(['status' => false, 'message' => "المنتج «{$product->name}» غير متوفر حالياً"], 422);
                 }
-
                 if (!$product->isQuantityAvailable($item['quantity'])) {
-                    return response()->json([
-                        'status'  => false,
-                        'message' => "الكمية المطلوبة من «{$product->name}» غير متوفرة. المتاح: {$product->quantity}",
-                    ], 422);
+                    return response()->json(['status' => false, 'message' => "الكمية المطلوبة من «{$product->name}» غير متوفرة. المتاح: {$product->quantity}"], 422);
                 }
             }
 
-            // ── طريقة الدفع ──
             $paymentMethod = PaymentMethod::find($request->payment_method_id);
             $isDayn        = $paymentMethod->name === 'دين';
 
-            // ── حساب الإجماليات ──
             $totalAmount = 0;
             $orderItems  = [];
-
             foreach ($request->items as $item) {
                 $product      = $products->get($item['product_id']);
                 $unitPrice    = $product->discounted_price;
                 $subtotal     = $item['quantity'] * $unitPrice;
                 $totalAmount += $subtotal;
-
                 $orderItems[] = [
                     'product_id'    => $product->id,
                     'store_id'      => $product->store_id,
@@ -235,11 +224,7 @@ class GroceryOrderController extends Controller
                 ];
             }
 
-            // ── إنشاء الطلب ──
-            $order = DB::transaction(function () use (
-                $request, $groceryStore, $isDayn,
-                $totalAmount, $orderItems, $products
-            ) {
+            $order = DB::transaction(function () use ($request, $groceryStore, $isDayn, $totalAmount, $orderItems, $products) {
                 $order = Order::create([
                     'store_id'                 => $groceryStore->id,
                     'total_amount'             => $totalAmount,
@@ -253,12 +238,10 @@ class GroceryOrderController extends Controller
                     'delivery_address'         => $request->delivery_address,
                     'notes'                    => $request->notes,
                 ]);
-
                 foreach ($orderItems as $item) {
                     OrderDetail::create(array_merge(['order_id' => $order->id], $item));
                     $products->get($item['product_id'])->deductStock($item['quantity']);
                 }
-
                 if ($isDayn) {
                     $merchantStoreIds = collect($orderItems)->pluck('store_id')->unique();
                     foreach ($merchantStoreIds as $merchantStoreId) {
@@ -269,49 +252,29 @@ class GroceryOrderController extends Controller
                         ]);
                     }
                 }
-
                 return $order;
             });
 
-            // ── إشعارات ──
             if ($isDayn) {
                 $merchantStoreIds = collect($orderItems)->pluck('store_id')->unique();
-
                 foreach ($merchantStoreIds as $merchantStoreId) {
-                    $merchantUser = User::whereHas('store',
-                        fn($q) => $q->where('id', $merchantStoreId)
-                    )->first();
-
+                    $merchantUser = User::whereHas('store', fn($q) => $q->where('id', $merchantStoreId))->first();
                     if (!$merchantUser) continue;
-
-                    $merchantTotal = collect($orderItems)
-                        ->where('store_id', $merchantStoreId)
-                        ->sum('subtotal');
-
+                    $merchantTotal = collect($orderItems)->where('store_id', $merchantStoreId)->sum('subtotal');
                     $this->sendNotification(
                         $merchantUser->id,
                         'طلب دين جديد يحتاج موافقتك 🔔',
                         "لديك طلب رقم #{$order->id} من {$groceryStore->store_name} بمبلغ {$merchantTotal} ريال",
-                        [
-                            'type'     => 'dayn_order_pending',
-                            'order_id' => (string) $order->id,
-                            'amount'   => (string) $merchantTotal,
-                        ]
+                        ['type' => 'dayn_order_pending', 'order_id' => (string) $order->id]
                     );
                 }
             }
 
-            $order->load([
-                'paymentMethod:id,name',
-                'orderDetails.product:id,name,unit_type',
-                'merchantApprovals.merchantStore:id,store_name',
-            ]);
+            $order->load(['paymentMethod:id,name', 'orderDetails.product:id,name,unit_type', 'merchantApprovals.merchantStore:id,store_name']);
 
             return response()->json([
                 'status'  => true,
-                'message' => $isDayn
-                    ? 'تم إرسال الطلب وبانتظار موافقة التاجر'
-                    : 'تم إنشاء الطلب بنجاح',
+                'message' => $isDayn ? 'تم إرسال الطلب وبانتظار موافقة التاجر' : 'تم إنشاء الطلب بنجاح',
                 'data'    => new OrderResource($order),
             ], 201);
 
@@ -320,10 +283,11 @@ class GroceryOrderController extends Controller
         }
     }
 
-    // =========================================================
+    // ═══════════════════════════════════════════════════════════
     // DELETE /api/auth/grocery/orders/{id}/cancel
-    // =========================================================
-    public function cancel($id)
+    // إلغاء الطلب مع التحقق من كلمة المرور
+    // ═══════════════════════════════════════════════════════════
+    public function cancel(CancelOrderRequest $request, $id)
     {
         try {
             $store = $this->getGroceryStore();
@@ -338,6 +302,10 @@ class GroceryOrderController extends Controller
                     'message' => 'لا يمكن إلغاء الطلب بعد بدء المعالجة',
                 ], 422);
             }
+
+            // ── التحقق من كلمة المرور ──
+            $check = $this->verifyPassword($request->password);
+            if ($check !== true) return $check;
 
             DB::transaction(function () use ($order) {
                 foreach ($order->orderDetails as $detail) {
@@ -358,21 +326,7 @@ class GroceryOrderController extends Controller
         }
     }
 
-    // ─────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────
-    private function forbiddenResponse($message)
-    {
-        return response()->json(['status' => false, 'message' => $message], 403);
-    }
-
-    private function notFoundResponse($message)
-    {
-        return response()->json(['status' => false, 'message' => $message], 404);
-    }
-
-    private function serverError()
-    {
-        return response()->json(['status' => false, 'message' => 'حدث خطأ في الخادم'], 500);
-    }
+    private function forbiddenResponse($message)  { return response()->json(['status' => false, 'message' => $message], 403); }
+    private function notFoundResponse($message)    { return response()->json(['status' => false, 'message' => $message], 404); }
+    private function serverError()                 { return response()->json(['status' => false, 'message' => 'حدث خطأ في الخادم'], 500); }
 }
